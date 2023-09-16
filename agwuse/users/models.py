@@ -1,7 +1,50 @@
 from django.contrib.auth.models import AbstractUser
-from django.db.models import CASCADE, CharField, DateField, EmailField, ForeignKey, IntegerField
+from django.db.models import CASCADE, CharField, DateField, EmailField, ForeignKey, IntegerField, Model
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+
+class Department(Model):
+    """Model for the Departments in the organisation"""
+
+    id = CharField(
+        primary_key=True,
+        unique=True,
+    )
+    name = CharField(
+        _("Name of Departments"),
+        max_length=20,
+        unique=True,
+    )
+    description = CharField(
+        _("Brief description of the Department"),
+        max_length=1024,
+    )
+
+    class Meta:
+        db_table = "departments"
+
+
+class Unit(Model):
+    """Model for the Units in the organisation"""
+
+    id = CharField(
+        primary_key=True,
+        unique=True,
+    )
+    name = CharField(
+        _("Name of Departments"),
+        max_length=20,
+        unique=True,
+    )
+    description = CharField(
+        _("Brief description of the Department"),
+        max_length=1024,
+    )
+
+    class Meta:
+        db_table = "units"
 
 
 class User(AbstractUser):
@@ -32,17 +75,16 @@ class User(AbstractUser):
     middle_name = CharField(_("Middle name of User"), blank=True, max_length=50)
     first_name = CharField(_("First Name of User"), max_length=50)  # type: ignore
     last_name = CharField(_("Last name of User"), max_length=50)  # type: ignore
-    dob = DateField(_("Date of Birth"))
+    dob = DateField(_("Date of Birth"), default=timezone.now)
     sex = CharField(_("Gender"), choices=GENDER_TYPES)
-    username = CharField(_("Username"), max_length=50)
     marital_status = CharField(_("Marital Status"), choices=MARITAL_CHOICES)
     password = CharField(_("User Password"))
     email = EmailField(_("User Email"), unique=True)
     phone_number = CharField(_("User Phone Number"), max_length=20)
     occupation = CharField(_("User Occupation"), choices=OCCUPATION_CHOICES)
-    card_no = IntegerField()
-    department = ForeignKey("Departments", on_delete=CASCADE)
-    unit = ForeignKey("Units", on_delete=CASCADE)
+    card_no = IntegerField(null=True)
+    department = ForeignKey("Department", on_delete=CASCADE, null=True)
+    unit = ForeignKey("Unit", on_delete=CASCADE, null=True)
     # post =
 
     def get_absolute_url(self) -> str:
