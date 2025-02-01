@@ -11,6 +11,14 @@ License: MIT
 
 Moved to [settings](http://cookiecutter-django.readthedocs.io/en/latest/settings.html).
 
+
+checklist
+- add `.env` file to root directory & make sure .gitignores it
+- create database and add `DATABASE_URL` to `.env` file
+- `export DJANGO_READ_DOT_ENV_FILE=True` --> optional: add to `~/.bashrc` file
+- setting up user (*see section below)
+
+
 ## Basic Commands
 
 ### Setting Up Your Users
