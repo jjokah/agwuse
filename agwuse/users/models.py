@@ -1,5 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db.models import CharField
+from django.db.models import ManyToManyField
+from django.db.models import Model
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
@@ -16,6 +18,13 @@ class User(AbstractUser):
     first_name = None  # type: ignore[assignment]
     last_name = None  # type: ignore[assignment]
 
+    departments = ManyToManyField(
+        "Department",
+        verbose_name=_("Departments"),
+        blank=True,
+        related_name="users",
+    )
+
     def get_absolute_url(self) -> str:
         """Get URL for user's detail view.
 
@@ -24,3 +33,14 @@ class User(AbstractUser):
 
         """
         return reverse("users:detail", kwargs={"username": self.username})
+
+
+class Department(Model):
+    """
+    Represents a department within the church.
+    """
+
+    name = CharField(_("Department Name"), max_length=255, unique=True)
+
+    def __str__(self):
+        return self.name
