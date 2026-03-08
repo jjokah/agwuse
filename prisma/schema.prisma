@@ -428,8 +428,7 @@ model AuditLog {
 }
 
 model ChurchSettings {
-  id    String @id @default("default")
-  key   String @unique
+  key   String @id
   value String @db.Text
 
   updatedAt DateTime @updatedAt

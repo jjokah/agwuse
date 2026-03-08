@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: agwuse-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agwuse
+      POSTGRES_PASSWORD: agwuse_dev_2026
+      POSTGRES_DB: agwuse
+    ports:
+      - "5433:5432"
+    volumes:
+      - agwuse_pgdata:/var/lib/postgresql/data
+
+volumes:
+  agwuse_pgdata:

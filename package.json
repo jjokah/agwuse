@@ -6,7 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:migrate": "prisma migrate dev --config prisma/prisma.config.ts",
+    "db:push": "prisma db push --config prisma/prisma.config.ts",
+    "db:generate": "prisma generate --config prisma/prisma.config.ts",
+    "db:studio": "prisma studio --config prisma/prisma.config.ts",
+    "db:seed": "tsx prisma/seed.ts",
+    "postinstall": "prisma generate --config prisma/prisma.config.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -60,6 +66,7 @@
     "eslint-config-next": "16.1.6",
     "prisma": "^7.4.2",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }
