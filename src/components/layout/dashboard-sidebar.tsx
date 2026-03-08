@@ -106,13 +106,11 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
-                      asChild
+                      render={<Link href={item.href} />}
                       isActive={pathname === item.href}
                     >
-                      <Link href={item.href}>
-                        {Icon && <Icon className="size-4" />}
-                        <span>{item.label}</span>
-                      </Link>
+                      {Icon && <Icon className="size-4" />}
+                      <span>{item.label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -134,13 +132,11 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
                     return (
                       <SidebarMenuItem key={item.href}>
                         <SidebarMenuButton
-                          asChild
+                          render={<Link href={item.href} />}
                           isActive={pathname.startsWith(item.href)}
                         >
-                          <Link href={item.href}>
-                            {Icon && <Icon className="size-4" />}
-                            <span>{item.label}</span>
-                          </Link>
+                          {Icon && <Icon className="size-4" />}
+                          <span>{item.label}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
@@ -164,13 +160,11 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
                     return (
                       <SidebarMenuItem key={item.href}>
                         <SidebarMenuButton
-                          asChild
+                          render={<Link href={item.href} />}
                           isActive={pathname.startsWith(item.href)}
                         >
-                          <Link href={item.href}>
-                            {Icon && <Icon className="size-4" />}
-                            <span>{item.label}</span>
-                          </Link>
+                          {Icon && <Icon className="size-4" />}
+                          <span>{item.label}</span>
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     );
