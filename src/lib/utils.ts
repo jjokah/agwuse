@@ -30,7 +30,7 @@ export function formatRelativeTime(date: Date | string): string {
   return formatDistanceToNow(d, { addSuffix: true });
 }
 
-export function generateReceiptNumber(year: number, sequence: number): string {
+export function formatReceiptNumber(year: number, sequence: number): string {
   return `AG-${year}-${String(sequence).padStart(5, "0")}`;
 }
 
