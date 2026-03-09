@@ -102,7 +102,7 @@ export default async function PledgesPage() {
                         {pledge.status}
                       </Badge>
                     </TableCell>
-                    <TableCell>{formatDate(pledge.endDate)}</TableCell>
+                    <TableCell>{pledge.endDate ? formatDate(pledge.endDate) : "—"}</TableCell>
                   </TableRow>
                 );
               })}

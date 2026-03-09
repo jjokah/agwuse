@@ -80,7 +80,7 @@ export function TransactionForm({ members, categories, redirectTo = "/admin/fina
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="type">Transaction Type</Label>
-          <Select name="type" required onValueChange={(v) => v && setTxType(v)}>
+          <Select name="type" required onValueChange={(v) => { if (typeof v === "string") setTxType(v); }}>
             <SelectTrigger>
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
