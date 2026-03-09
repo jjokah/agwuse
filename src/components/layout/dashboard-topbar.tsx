@@ -11,6 +11,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { usePathname } from "next/navigation";
+import { Fragment } from "react";
 
 const LABELS: Record<string, string> = {
   dashboard: "Dashboard",
@@ -48,10 +49,12 @@ export function DashboardTopbar() {
                 <BreadcrumbPage>{label}</BreadcrumbPage>
               </BreadcrumbItem>
             ) : (
-              <BreadcrumbItem key={href}>
-                <BreadcrumbLink href={href}>{label}</BreadcrumbLink>
+              <Fragment key={href}>
+                <BreadcrumbItem>
+                  <BreadcrumbLink href={href}>{label}</BreadcrumbLink>
+                </BreadcrumbItem>
                 <BreadcrumbSeparator />
-              </BreadcrumbItem>
+              </Fragment>
             );
           })}
         </BreadcrumbList>
