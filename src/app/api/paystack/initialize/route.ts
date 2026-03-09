@@ -47,7 +47,7 @@ export async function POST(request: Request) {
         name: data.name || "",
         memberId: data.memberId || "",
       },
-      callback_url: `${process.env.NEXTAUTH_URL}/give?status=success`,
+      callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/give?status=success`,
     }),
   });
 

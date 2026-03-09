@@ -7,7 +7,7 @@ const connectionString =
   process.env.DATABASE_URL ??
   "postgresql://agwuse:agwuse_dev_2026@localhost:5433/agwuse";
 
-const pool = new pg.Pool({ connectionString });
+const pool = new pg.Pool({ connectionString, max: 1 });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
