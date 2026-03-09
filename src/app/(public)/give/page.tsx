@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Banknote, CreditCard, Landmark } from "lucide-react";
+import { Banknote, CreditCard, Landmark, Globe } from "lucide-react";
 import { CHURCH_INFO } from "@/lib/constants";
+import { PaystackForm } from "./paystack-form";
 
 export const metadata: Metadata = {
   title: "Give",
@@ -69,6 +70,18 @@ export default function GivePage() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Online Payment */}
+        <div className="mb-12 rounded-lg border bg-card p-8">
+          <div className="mb-6 text-center">
+            <Globe className="mx-auto mb-3 size-8 text-brand-gold" />
+            <h2 className="text-2xl font-bold">Give Online</h2>
+            <p className="text-sm text-muted-foreground">
+              Secure payment via Paystack
+            </p>
+          </div>
+          <PaystackForm />
         </div>
 
         {/* Giving Categories */}
