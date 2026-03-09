@@ -145,7 +145,8 @@ export function generateReportPDF(
   });
 
   // Income breakdown
-  y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+  y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
+  y += 10;
 
   if (Object.keys(summary.incomeByType).length > 0) {
     doc.setFontSize(11);
@@ -167,7 +168,8 @@ export function generateReportPDF(
       styles: { fontSize: 9 },
     });
 
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+    y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
+  y += 10;
   }
 
   // Expense breakdown
@@ -191,7 +193,8 @@ export function generateReportPDF(
       styles: { fontSize: 9 },
     });
 
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+    y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
+  y += 10;
   }
 
   // Transaction detail table (new page if needed)

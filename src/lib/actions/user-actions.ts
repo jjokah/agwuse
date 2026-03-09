@@ -13,7 +13,7 @@ const updateProfileSchema = z.object({
   occupation: z.string().optional(),
   dateOfBirth: z.string().optional(),
   gender: z.enum(["MALE", "FEMALE"]).optional(),
-  maritalStatus: z.enum(["SINGLE", "MARRIED", "WIDOWED"]).optional(),
+  maritalStatus: z.enum(["SINGLE", "MARRIED", "WIDOWED", "DIVORCED"]).optional(),
 });
 
 const changePasswordSchema = z
@@ -43,8 +43,8 @@ export async function updateProfile(formData: FormData) {
     address: formData.get("address") as string,
     occupation: formData.get("occupation") as string,
     dateOfBirth: formData.get("dateOfBirth") as string,
-    gender: formData.get("gender") as string || undefined,
-    maritalStatus: formData.get("maritalStatus") as string || undefined,
+    gender: (formData.get("gender") as string) || undefined,
+    maritalStatus: (formData.get("maritalStatus") as string) || undefined,
   };
 
   const parsed = updateProfileSchema.safeParse(raw);
@@ -65,7 +65,7 @@ export async function updateProfile(formData: FormData) {
       occupation: occupation || null,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
       gender: (gender as "MALE" | "FEMALE") || null,
-      maritalStatus: (maritalStatus as "SINGLE" | "MARRIED" | "WIDOWED") || null,
+      maritalStatus: (maritalStatus as "SINGLE" | "MARRIED" | "WIDOWED" | "DIVORCED") || null,
     },
   });
 

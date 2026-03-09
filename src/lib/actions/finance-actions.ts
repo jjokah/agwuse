@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { z } from "zod/v4";
 import { formatReceiptNumber } from "@/lib/utils";
+import { revalidatePath } from "next/cache";
 
 async function generateReceiptNumber(): Promise<string> {
   const year = new Date().getFullYear();
@@ -13,9 +14,8 @@ async function generateReceiptNumber(): Promise<string> {
     orderBy: { receiptNumber: "desc" },
     select: { receiptNumber: true },
   });
-  const lastSeq = lastTx?.receiptNumber
-    ? parseInt(lastTx.receiptNumber.slice(-5), 10)
-    : 0;
+  const match = lastTx?.receiptNumber?.match(/-(\d{5})$/);
+  const lastSeq = match ? parseInt(match[1], 10) : 0;
   return formatReceiptNumber(year, lastSeq + 1);
 }
 
@@ -56,6 +56,16 @@ export async function createTransaction(formData: FormData) {
   const data = parsed.data;
   const receiptNumber = await generateReceiptNumber();
 
+  // Resolve expense category name if categoryId is provided
+  let expenseCategoryName: string | null = null;
+  if (data.type === "EXPENSE" && data.categoryId) {
+    const expCat = await prisma.financialCategory.findUnique({
+      where: { id: data.categoryId },
+      select: { name: true },
+    });
+    expenseCategoryName = expCat?.name ?? null;
+  }
+
   const transaction = await prisma.financialTransaction.create({
     data: {
       type: data.type,
@@ -65,7 +75,7 @@ export async function createTransaction(formData: FormData) {
       date: new Date(data.date),
       memberId: data.memberId || null,
       category: (data.offeringCategory || "GENERAL") as "GENERAL" | "SPECIAL" | "MISSION" | "BUILDING_FUND" | "WELFARE" | "THANKSGIVING" | "HARVEST" | "FIRST_FRUIT" | "OTHER",
-      customCategory: data.categoryId || null,
+      customCategory: data.type === "EXPENSE" ? expenseCategoryName : null,
       referenceNumber: data.referenceNumber || null,
       notes: data.notes || null,
       pledgeId: data.pledgeId || null,
@@ -105,6 +115,10 @@ export async function createTransaction(formData: FormData) {
       userId: session.user.id,
     },
   });
+
+  revalidatePath("/admin/finance");
+  revalidatePath("/finance");
+  revalidatePath("/my-giving");
 
   return { success: true, receiptNumber };
 }
@@ -146,6 +160,8 @@ export async function createPledge(formData: FormData) {
       memberId: data.memberId,
     },
   });
+
+  revalidatePath("/admin/finance/pledges");
 
   return { success: true };
 }

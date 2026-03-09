@@ -128,6 +128,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
               <SelectItem value="SINGLE">Single</SelectItem>
               <SelectItem value="MARRIED">Married</SelectItem>
               <SelectItem value="WIDOWED">Widowed</SelectItem>
+              <SelectItem value="DIVORCED">Divorced</SelectItem>
             </SelectContent>
           </Select>
         </div>

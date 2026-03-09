@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Megaphone } from "lucide-react";
 
@@ -52,7 +53,7 @@ export default async function AnnouncementsPage() {
                 {post.content && !post.excerpt && (
                   <div
                     className="prose prose-sm max-w-none text-muted-foreground dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: post.content }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }}
                   />
                 )}
               </div>
