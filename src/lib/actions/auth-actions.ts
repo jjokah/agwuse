@@ -64,7 +64,10 @@ export async function registerUser(formData: FormData): Promise<AuthActionResult
   });
 
   // Send verification email
-  await sendVerificationEmail(email, token);
+  const emailResult = await sendVerificationEmail(email, token);
+  if (!emailResult.success) {
+    return { success: false, error: "Failed to send verification email. Please try again." };
+  }
 
   return { success: true };
 }

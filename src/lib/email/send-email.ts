@@ -2,7 +2,7 @@
 
 import { Resend } from "resend";
 
-const FROM_EMAIL = "AG Wuse <noreply@agwuse.org>";
+const FROM_EMAIL = "AG Wuse <noreply@updates.magnisale.com>";
 
 function getResendClient() {
   return new Resend(process.env.RESEND_API_KEY);
