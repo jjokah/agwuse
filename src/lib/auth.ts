@@ -57,24 +57,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id!;
-        token.role = (user as { role: string }).role;
-        token.status = (user as { status: string }).status;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as typeof session.user.role;
-        session.user.status = token.status as typeof session.user.status;
-      }
-      return session;
-    },
-  },
+  // callbacks (jwt, session) inherited from authConfig
 });
 
 type UserRole =
