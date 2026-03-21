@@ -4,6 +4,8 @@ import { SubmissionForm } from "@/components/forms/submission-form";
 import { submitTestimony } from "@/lib/actions/submission-actions";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Share Testimony",
   description: "Share your testimony of what God has done in your life.",

@@ -14,6 +14,7 @@ export default async function AdminGalleryPage() {
 
   const images = await prisma.galleryImage.findMany({
     orderBy: [{ albumName: "asc" }, { sortOrder: "asc" }],
+    take: 200,
   });
 
   const albums = Array.from(new Set(images.map((i) => i.albumName).filter(Boolean))) as string[];

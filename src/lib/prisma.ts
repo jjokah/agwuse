@@ -4,7 +4,7 @@ import pg from "pg";
 
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL!;
-  const pool = new pg.Pool({ connectionString, max: 1 });
+  const pool = new pg.Pool({ connectionString, max: 5 });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }

@@ -5,6 +5,8 @@ import { formatDate } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Calendar, MapPin } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Events",
   description: "Upcoming events and programs at AG Wuse Church.",

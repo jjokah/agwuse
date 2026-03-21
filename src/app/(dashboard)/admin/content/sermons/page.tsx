@@ -23,6 +23,7 @@ export default async function AdminSermonsPage() {
 
   const sermons = await prisma.sermon.findMany({
     orderBy: { date: "desc" },
+    take: 200,
   });
 
   return (

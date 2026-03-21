@@ -66,40 +66,44 @@ export async function createTransaction(formData: FormData) {
     expenseCategoryName = expCat?.name ?? null;
   }
 
-  const transaction = await prisma.financialTransaction.create({
-    data: {
-      type: data.type,
-      amount: data.amount,
-      currency: "NGN",
-      paymentMethod: data.paymentMethod,
-      date: new Date(data.date),
-      memberId: data.memberId || null,
-      category: (data.offeringCategory || "GENERAL") as "GENERAL" | "SPECIAL" | "MISSION" | "BUILDING_FUND" | "WELFARE" | "THANKSGIVING" | "HARVEST" | "FIRST_FRUIT" | "OTHER",
-      customCategory: data.type === "EXPENSE" ? expenseCategoryName : null,
-      referenceNumber: data.referenceNumber || null,
-      notes: data.notes || null,
-      pledgeId: data.pledgeId || null,
-      receiptNumber,
-      recordedById: session.user.id,
-    },
-  });
-
-  // If pledge payment, update pledge amountPaid
-  if (data.type === "PLEDGE_PAYMENT" && data.pledgeId) {
-    const pledge = await prisma.pledge.findUnique({
-      where: { id: data.pledgeId },
+  const transaction = await prisma.$transaction(async (tx) => {
+    const txn = await tx.financialTransaction.create({
+      data: {
+        type: data.type,
+        amount: data.amount,
+        currency: "NGN",
+        paymentMethod: data.paymentMethod,
+        date: new Date(data.date),
+        memberId: data.memberId || null,
+        category: (data.offeringCategory || "GENERAL") as "GENERAL" | "SPECIAL" | "MISSION" | "BUILDING_FUND" | "WELFARE" | "THANKSGIVING" | "HARVEST" | "FIRST_FRUIT" | "OTHER",
+        customCategory: data.type === "EXPENSE" ? expenseCategoryName : null,
+        referenceNumber: data.referenceNumber || null,
+        notes: data.notes || null,
+        pledgeId: data.pledgeId || null,
+        receiptNumber,
+        recordedById: session.user.id,
+      },
     });
-    if (pledge) {
-      const newAmountPaid = Number(pledge.amountPaid) + data.amount;
-      await prisma.pledge.update({
+
+    // If pledge payment, update pledge amountPaid
+    if (data.type === "PLEDGE_PAYMENT" && data.pledgeId) {
+      const pledge = await tx.pledge.findUnique({
         where: { id: data.pledgeId },
-        data: {
-          amountPaid: newAmountPaid,
-          status: newAmountPaid >= Number(pledge.amount) ? "FULFILLED" : "ACTIVE",
-        },
       });
+      if (pledge) {
+        const newAmountPaid = Number(pledge.amountPaid) + data.amount;
+        await tx.pledge.update({
+          where: { id: data.pledgeId },
+          data: {
+            amountPaid: newAmountPaid,
+            status: newAmountPaid >= Number(pledge.amount) ? "FULFILLED" : "ACTIVE",
+          },
+        });
+      }
     }
-  }
+
+    return txn;
+  });
 
   // Audit log
   await prisma.auditLog.create({

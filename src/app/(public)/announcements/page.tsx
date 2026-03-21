@@ -5,6 +5,8 @@ import { sanitizeHtml } from "@/lib/sanitize";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Megaphone } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Announcements",
   description: "Latest announcements from AG Wuse Church.",

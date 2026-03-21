@@ -63,6 +63,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Bold"
           className={`size-8 p-0 ${editor.isActive("bold") ? "bg-muted" : ""}`}
           onClick={() => editor.chain().focus().toggleBold().run()}
         >
@@ -72,6 +73,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Italic"
           className={`size-8 p-0 ${editor.isActive("italic") ? "bg-muted" : ""}`}
           onClick={() => editor.chain().focus().toggleItalic().run()}
         >
@@ -81,6 +83,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Heading 2"
           className={`size-8 p-0 ${editor.isActive("heading", { level: 2 }) ? "bg-muted" : ""}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
         >
@@ -90,6 +93,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Heading 3"
           className={`size-8 p-0 ${editor.isActive("heading", { level: 3 }) ? "bg-muted" : ""}`}
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
         >
@@ -99,6 +103,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Bullet list"
           className={`size-8 p-0 ${editor.isActive("bulletList") ? "bg-muted" : ""}`}
           onClick={() => editor.chain().focus().toggleBulletList().run()}
         >
@@ -108,6 +113,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Ordered list"
           className={`size-8 p-0 ${editor.isActive("orderedList") ? "bg-muted" : ""}`}
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
         >
@@ -117,6 +123,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Blockquote"
           className={`size-8 p-0 ${editor.isActive("blockquote") ? "bg-muted" : ""}`}
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
         >
@@ -126,6 +133,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Horizontal rule"
           className="size-8 p-0"
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
         >
@@ -135,6 +143,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Insert link"
           className={`size-8 p-0 ${editor.isActive("link") ? "bg-muted" : ""}`}
           onClick={addLink}
         >
@@ -144,6 +153,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Insert image"
           className="size-8 p-0"
           onClick={addImage}
         >
@@ -154,6 +164,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Undo"
           className="size-8 p-0"
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().undo()}
@@ -164,6 +175,7 @@ export function RichTextEditor({ content, onChange }: RichTextEditorProps) {
           type="button"
           variant="ghost"
           size="sm"
+          aria-label="Redo"
           className="size-8 p-0"
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().redo()}

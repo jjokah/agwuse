@@ -4,6 +4,8 @@ import { formatDate } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Headphones, Video } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Sermons",
   description: "Listen to and watch sermons from AG Wuse Church.",

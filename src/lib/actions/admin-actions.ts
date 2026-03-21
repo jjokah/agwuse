@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { auth } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
 
 async function auditLog(
   action: string,
@@ -45,6 +46,7 @@ export async function approveUser(userId: string) {
     previousStatus: user.status,
   });
 
+  revalidatePath("/admin/users");
   return { success: true };
 }
 
@@ -71,6 +73,7 @@ export async function deactivateUser(userId: string) {
     previousStatus: user.status,
   });
 
+  revalidatePath("/admin/users");
   return { success: true };
 }
 
@@ -111,5 +114,6 @@ export async function changeUserRole(
     newRole,
   });
 
+  revalidatePath("/admin/users");
   return { success: true };
 }

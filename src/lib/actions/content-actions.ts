@@ -243,6 +243,10 @@ export async function createGalleryImage(formData: FormData) {
     return { success: false, error: "Image URL is required" };
   }
 
+  if (!url.startsWith("https://")) {
+    return { success: false, error: "Image URL must use HTTPS" };
+  }
+
   await prisma.galleryImage.create({
     data: { url, caption, albumName },
   });
@@ -475,5 +479,6 @@ export async function updateChurchSetting(key: string, value: string) {
     create: { key, value },
     update: { value },
   });
+  revalidatePath("/admin/settings");
   return { success: true };
 }
