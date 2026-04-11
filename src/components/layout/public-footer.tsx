@@ -4,8 +4,12 @@ import { CHURCH_INFO } from "@/lib/constants";
 
 export function PublicFooter() {
   return (
-    <footer className="mt-auto border-t bg-brand-navy px-4 py-12 text-gray-300">
-      <div className="mx-auto grid max-w-7xl gap-8 sm:grid-cols-2 lg:grid-cols-4">
+    <footer className="relative mt-auto overflow-hidden border-t border-border/50 bg-card px-4 pt-16 pb-8 text-muted-foreground transition-colors duration-300">
+      {/* Background Decorative Blobs */}
+      <div className="absolute top-0 right-0 h-[400px] w-[400px] rounded-full bg-primary/5 blur-[100px] z-0" />
+      <div className="absolute bottom-0 left-0 h-[400px] w-[400px] rounded-full bg-secondary/5 blur-[100px] z-0" />
+      
+      <div className="relative z-10 mx-auto grid max-w-7xl gap-8 sm:grid-cols-2 lg:grid-cols-4">
         {/* Church Info */}
         <div>
           <div className="mb-4 flex items-center gap-3">
@@ -14,65 +18,53 @@ export function PublicFooter() {
               alt={CHURCH_INFO.shortName}
               width={40}
               height={40}
+              className="drop-shadow-md"
             />
-            <span className="font-bold text-white">
+            <span className="font-bold tracking-tight text-foreground text-lg">
               {CHURCH_INFO.shortName}
             </span>
           </div>
-          <p className="text-sm italic text-brand-gold-light">
+          <p className="text-sm italic text-primary/80">
             {CHURCH_INFO.tagline}
           </p>
         </div>
 
         {/* Quick Links */}
         <div>
-          <h4 className="mb-3 font-semibold text-white">Quick Links</h4>
+          <h4 className="mb-3 font-semibold text-foreground">Quick Links</h4>
           <ul className="space-y-2 text-sm">
-            <li>
-              <Link href="/about" className="hover:text-brand-gold">
-                About Us
-              </Link>
-            </li>
-            <li>
-              <Link href="/ministers" className="hover:text-brand-gold">
-                Ministers
-              </Link>
-            </li>
-            <li>
-              <Link href="/departments" className="hover:text-brand-gold">
-                Departments
-              </Link>
-            </li>
-            <li>
-              <Link href="/blog" className="hover:text-brand-gold">
-                Blog
-              </Link>
-            </li>
-            <li>
-              <Link href="/events" className="hover:text-brand-gold">
-                Events
-              </Link>
-            </li>
-            <li>
-              <Link href="/contact" className="hover:text-brand-gold">
-                Contact
-              </Link>
-            </li>
+            {[
+              { href: "/about", label: "About Us" },
+              { href: "/ministers", label: "Ministers" },
+              { href: "/departments", label: "Departments" },
+              { href: "/blog", label: "Blog" },
+              { href: "/events", label: "Events" },
+              { href: "/contact", label: "Contact" },
+            ].map((link) => (
+              <li key={link.href}>
+                <Link 
+                  href={link.href} 
+                  className="inline-block hover:text-primary hover:translate-x-1 transition-all duration-300"
+                >
+                  {link.label}
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
 
         {/* Contact */}
         <div>
-          <h4 className="mb-3 font-semibold text-white">Contact</h4>
+          <h4 className="mb-3 font-semibold text-foreground">Contact</h4>
           <ul className="space-y-2 text-sm">
-            <li>{CHURCH_INFO.address}</li>
+            <li className="flex items-start">{CHURCH_INFO.address}</li>
             {CHURCH_INFO.phones.map((phone) => (
               <li key={phone}>{phone}</li>
             ))}
             <li>
               <a
                 href={`mailto:${CHURCH_INFO.email}`}
-                className="hover:text-brand-gold"
+                className="inline-block hover:text-primary transition-colors duration-300"
               >
                 {CHURCH_INFO.email}
               </a>
@@ -82,14 +74,17 @@ export function PublicFooter() {
 
         {/* Give */}
         <div>
-          <h4 className="mb-3 font-semibold text-white">Give</h4>
+          <h4 className="mb-3 font-semibold text-foreground">Give</h4>
           <ul className="space-y-2 text-sm">
             <li>{CHURCH_INFO.bankName}</li>
-            <li className="font-mono text-brand-gold">
+            <li className="font-mono text-primary font-medium">
               {CHURCH_INFO.bankAccount}
             </li>
-            <li>
-              <Link href="/give" className="hover:text-brand-gold">
+            <li className="mt-4">
+              <Link 
+                href="/give" 
+                className="inline-flex items-center text-primary font-medium hover:text-primary/80 hover:translate-x-1 transition-all duration-300"
+              >
                 Give Online &rarr;
               </Link>
             </li>
@@ -98,17 +93,17 @@ export function PublicFooter() {
       </div>
 
       {/* Bottom bar */}
-      <div className="mx-auto mt-8 max-w-7xl border-t border-gray-700 pt-6">
-        <div className="flex flex-col items-center justify-between gap-4 text-center text-sm sm:flex-row">
+      <div className="relative z-10 mx-auto mt-12 max-w-7xl border-t border-border/50 pt-6">
+        <div className="flex flex-col items-center justify-between gap-4 text-center text-sm md:flex-row">
           <p>
             &copy; {new Date().getFullYear()} {CHURCH_INFO.name}. All rights
             reserved.
           </p>
-          <div className="flex gap-4">
-            <Link href="/privacy-policy" className="hover:text-brand-gold">
+          <div className="flex gap-6">
+            <Link href="/privacy-policy" className="hover:text-primary transition-colors duration-300">
               Privacy Policy
             </Link>
-            <Link href="/terms" className="hover:text-brand-gold">
+            <Link href="/terms" className="hover:text-primary transition-colors duration-300">
               Terms of Service
             </Link>
           </div>
