@@ -63,7 +63,12 @@ const ADMIN_NAV = [
   { label: "Admin Dashboard", href: "/admin", icon: "Shield" },
   { label: "Users", href: "/admin/users", icon: "Users" },
   { label: "Finance", href: "/admin/finance", icon: "Wallet" },
-  { label: "Content", href: "/admin/content/blog", icon: "FileEdit" },
+  {
+    label: "Content",
+    href: "/admin/content/blog",
+    icon: "FileEdit",
+    activePrefix: "/admin/content",
+  },
   { label: "Settings", href: "/admin/settings", icon: "Settings" },
 ];
 
@@ -157,11 +162,15 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
                 <SidebarMenu>
                   {ADMIN_NAV.map((item) => {
                     const Icon = ICONS[item.icon];
+                    const prefix =
+                      "activePrefix" in item && item.activePrefix
+                        ? item.activePrefix
+                        : item.href;
                     return (
                       <SidebarMenuItem key={item.href}>
                         <SidebarMenuButton
                           render={<Link href={item.href} />}
-                          isActive={pathname.startsWith(item.href)}
+                          isActive={pathname.startsWith(prefix)}
                         >
                           {Icon && <Icon className="size-4" />}
                           <span>{item.label}</span>

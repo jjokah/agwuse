@@ -435,3 +435,15 @@ model ChurchSettings {
 
   @@map("church_settings")
 }
+
+model LiveStreamConfig {
+  id          String   @id @default("default")
+  youtubeUrl  String?
+  facebookUrl String?
+  isLive      Boolean  @default(false)
+  title       String?
+  description String?  @db.Text
+  updatedAt   DateTime @updatedAt
+
+  @@map("live_stream_config")
+}

@@ -276,12 +276,24 @@ CREATE TABLE "audit_logs" (
 
 -- CreateTable
 CREATE TABLE "church_settings" (
-    "id" TEXT NOT NULL DEFAULT 'default',
     "key" TEXT NOT NULL,
     "value" TEXT NOT NULL,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "church_settings_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "church_settings_pkey" PRIMARY KEY ("key")
+);
+
+-- CreateTable
+CREATE TABLE "live_stream_config" (
+    "id" TEXT NOT NULL DEFAULT 'default',
+    "youtubeUrl" TEXT,
+    "facebookUrl" TEXT,
+    "isLive" BOOLEAN NOT NULL DEFAULT false,
+    "title" TEXT,
+    "description" TEXT,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "live_stream_config_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -391,9 +403,6 @@ CREATE INDEX "audit_logs_userId_idx" ON "audit_logs"("userId");
 
 -- CreateIndex
 CREATE INDEX "audit_logs_createdAt_idx" ON "audit_logs"("createdAt");
-
--- CreateIndex
-CREATE UNIQUE INDEX "church_settings_key_key" ON "church_settings"("key");
 
 -- AddForeignKey
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

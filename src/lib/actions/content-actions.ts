@@ -482,3 +482,45 @@ export async function updateChurchSetting(key: string, value: string) {
   revalidatePath("/admin/settings");
   return { success: true };
 }
+
+// ============================================================
+// LIVE STREAM
+// ============================================================
+
+const liveStreamSchema = z.object({
+  youtubeUrl: z.string().optional(),
+  facebookUrl: z.string().optional(),
+  isLive: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+});
+
+export async function updateLiveStreamConfig(formData: FormData) {
+  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+
+  const raw = Object.fromEntries(formData);
+  const parsed = liveStreamSchema.parse(raw);
+
+  await prisma.liveStreamConfig.upsert({
+    where: { id: "default" },
+    create: {
+      id: "default",
+      youtubeUrl: parsed.youtubeUrl || null,
+      facebookUrl: parsed.facebookUrl || null,
+      isLive: parsed.isLive === "on",
+      title: parsed.title || null,
+      description: parsed.description || null,
+    },
+    update: {
+      youtubeUrl: parsed.youtubeUrl || null,
+      facebookUrl: parsed.facebookUrl || null,
+      isLive: parsed.isLive === "on",
+      title: parsed.title || null,
+      description: parsed.description || null,
+    },
+  });
+
+  revalidatePath("/admin/content/livestream");
+  revalidatePath("/live");
+  return { success: true };
+}
