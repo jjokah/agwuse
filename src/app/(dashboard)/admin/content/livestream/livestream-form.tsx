@@ -27,6 +27,8 @@ export function LiveStreamForm({ config }: LiveStreamFormProps) {
       const result = await updateLiveStreamConfig(formData);
       if (result.success) {
         toast.success("Live stream settings updated");
+      } else {
+        toast.error(result.error || "Failed to update live stream settings");
       }
     } catch {
       toast.error("An unexpected error occurred");

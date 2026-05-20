@@ -487,9 +487,27 @@ export async function updateChurchSetting(key: string, value: string) {
 // LIVE STREAM
 // ============================================================
 
+const YOUTUBE_EMBED_PREFIXES = [
+  "https://www.youtube.com/embed/",
+  "https://youtube.com/embed/",
+  "https://www.youtube-nocookie.com/embed/",
+];
+const FACEBOOK_EMBED_PREFIX = "https://www.facebook.com/plugins/video.php";
+
 const liveStreamSchema = z.object({
-  youtubeUrl: z.string().optional(),
-  facebookUrl: z.string().optional(),
+  youtubeUrl: z
+    .string()
+    .optional()
+    .refine(
+      (v) => !v || YOUTUBE_EMBED_PREFIXES.some((p) => v.startsWith(p)),
+      { error: "YouTube URL must start with https://www.youtube.com/embed/" }
+    ),
+  facebookUrl: z
+    .string()
+    .optional()
+    .refine((v) => !v || v.startsWith(FACEBOOK_EMBED_PREFIX), {
+      error: "Facebook URL must start with https://www.facebook.com/plugins/video.php",
+    }),
   isLive: z.string().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
@@ -499,24 +517,29 @@ export async function updateLiveStreamConfig(formData: FormData) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   const raw = Object.fromEntries(formData);
-  const parsed = liveStreamSchema.parse(raw);
+  const parsed = liveStreamSchema.safeParse(raw);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message };
+  }
+
+  const data = parsed.data;
 
   await prisma.liveStreamConfig.upsert({
     where: { id: "default" },
     create: {
       id: "default",
-      youtubeUrl: parsed.youtubeUrl || null,
-      facebookUrl: parsed.facebookUrl || null,
-      isLive: parsed.isLive === "on",
-      title: parsed.title || null,
-      description: parsed.description || null,
+      youtubeUrl: data.youtubeUrl || null,
+      facebookUrl: data.facebookUrl || null,
+      isLive: data.isLive === "on",
+      title: data.title || null,
+      description: data.description || null,
     },
     update: {
-      youtubeUrl: parsed.youtubeUrl || null,
-      facebookUrl: parsed.facebookUrl || null,
-      isLive: parsed.isLive === "on",
-      title: parsed.title || null,
-      description: parsed.description || null,
+      youtubeUrl: data.youtubeUrl || null,
+      facebookUrl: data.facebookUrl || null,
+      isLive: data.isLive === "on",
+      title: data.title || null,
+      description: data.description || null,
     },
   });
 
