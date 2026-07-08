@@ -138,13 +138,15 @@ async function main() {
     },
   ];
 
-  for (const dept of departments) {
-    await prisma.department.upsert({
-      where: { name: dept.name },
-      update: {},
-      create: dept,
-    });
-  }
+  await Promise.all(
+    departments.map((dept) =>
+      prisma.department.upsert({
+        where: { name: dept.name },
+        update: {},
+        create: dept,
+      })
+    )
+  );
   console.log(`  ✓ ${departments.length} departments seeded`);
 
   // ============================================================
@@ -176,13 +178,15 @@ async function main() {
     { name: "Miscellaneous", type: "EXPENSE" },
   ];
 
-  for (const cat of financialCategories) {
-    await prisma.financialCategory.upsert({
-      where: { name: cat.name },
-      update: {},
-      create: cat,
-    });
-  }
+  await Promise.all(
+    financialCategories.map((cat) =>
+      prisma.financialCategory.upsert({
+        where: { name: cat.name },
+        update: {},
+        create: cat,
+      })
+    )
+  );
   console.log(`  ✓ ${financialCategories.length} financial categories seeded`);
 
   // ============================================================
@@ -260,16 +264,18 @@ async function main() {
     },
   ];
 
-  for (const setting of churchSettings) {
-    await prisma.churchSettings.upsert({
-      where: { key: setting.key },
-      update: { value: setting.value },
-      create: {
-        key: setting.key,
-        value: setting.value,
-      },
-    });
-  }
+  await Promise.all(
+    churchSettings.map((setting) =>
+      prisma.churchSettings.upsert({
+        where: { key: setting.key },
+        update: { value: setting.value },
+        create: {
+          key: setting.key,
+          value: setting.value,
+        },
+      })
+    )
+  );
   console.log(`  ✓ ${churchSettings.length} church settings seeded`);
 
   console.log("\nSeeding complete!");
