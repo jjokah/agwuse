@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CHURCH_INFO } from "@/lib/constants";
+import { PageHero } from "@/components/public/page-hero";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
@@ -8,14 +9,14 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="px-4 py-12">
-      <div className="prose prose-lg mx-auto max-w-3xl dark:prose-invert">
-        <h1>Privacy Policy</h1>
-        <p className="lead">
-          This privacy policy explains how {CHURCH_INFO.name} (&quot;we&quot;,
-          &quot;us&quot;, or &quot;our&quot;) collects, uses, and protects your
-          personal information.
-        </p>
+    <>
+      <PageHero
+        eyebrow="Your Data"
+        title="Privacy Policy"
+        description={`How ${CHURCH_INFO.name} collects, uses, and protects your personal information.`}
+      />
+      <div className="px-4 py-16 sm:py-20">
+        <div className="prose prose-lg mx-auto max-w-3xl">
         <p>
           <em>Last updated: March 2026</em>
         </p>
@@ -79,7 +80,8 @@ export default function PrivacyPolicyPage() {
           <a href={`mailto:${CHURCH_INFO.email}`}>{CHURCH_INFO.email}</a> or
           visit us at {CHURCH_INFO.address}.
         </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -2,18 +2,20 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4 text-center">
-      <h1 className="text-6xl font-bold text-brand-navy dark:text-brand-gold">
-        404
+    <div className="flex min-h-screen flex-col items-center justify-center bg-cream px-4 text-center">
+      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gold-deep">
+        Error 404
+      </p>
+      <h1 className="font-display mt-4 text-5xl font-medium tracking-tight text-ink sm:text-6xl">
+        This page has wandered off
       </h1>
-      <h2 className="mt-4 text-2xl font-semibold">Page Not Found</h2>
-      <p className="mt-2 max-w-md text-muted-foreground">
+      <p className="mt-4 max-w-md leading-relaxed text-ink-soft">
         Sorry, we couldn&apos;t find the page you&apos;re looking for. It may
         have been moved or doesn&apos;t exist.
       </p>
       <Link
         href="/"
-        className="mt-6 inline-flex h-10 items-center justify-center rounded-lg bg-brand-gold px-6 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-gold-dark"
+        className="mt-8 inline-flex h-12 items-center justify-center rounded-full bg-brand-gold px-8 text-sm font-semibold text-brand-navy transition-colors hover:bg-brand-gold-dark"
       >
         Go Home
       </Link>

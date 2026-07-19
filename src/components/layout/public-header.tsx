@@ -17,76 +17,95 @@ import { NAV_ITEMS, CHURCH_INFO } from "@/lib/constants";
 import { MobileNav } from "./mobile-nav";
 import { useState } from "react";
 
+const triggerClass =
+  "bg-transparent text-[13px] font-medium uppercase tracking-wide text-ink hover:text-gold-deep data-[state=open]:text-gold-deep";
+
 export function PublicHeader() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
+    <header className="sticky top-0 z-40 border-b border-border bg-cream/90 backdrop-blur supports-[backdrop-filter]:bg-cream/75">
+      <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-4">
+        {/* Logo lockup */}
+        <Link href="/" className="flex items-center gap-3">
           <Image
             src="/ag-logo.png"
             alt={CHURCH_INFO.shortName}
-            width={36}
-            height={36}
+            width={40}
+            height={40}
           />
-          <span className="hidden font-bold text-brand-navy dark:text-white sm:inline-block">
-            {CHURCH_INFO.shortName}
+          <span className="hidden flex-col sm:flex">
+            <span className="text-lg font-bold leading-tight text-brand-navy">
+              {CHURCH_INFO.shortName}
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold-deep">
+              {CHURCH_INFO.tagline}
+            </span>
           </span>
         </Link>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation (Give lives in the right-side pill) */}
         <NavigationMenu className="hidden lg:flex">
           <NavigationMenuList>
-            {NAV_ITEMS.public.map((item) => {
-              if ("children" in item && item.children) {
+            {NAV_ITEMS.public
+              .filter((item) => !("href" in item && item.href === "/give"))
+              .map((item) => {
+                if ("children" in item && item.children) {
+                  return (
+                    <NavigationMenuItem key={item.label}>
+                      <NavigationMenuTrigger className={triggerClass}>
+                        {item.label}
+                      </NavigationMenuTrigger>
+                      <NavigationMenuContent>
+                        <ul className="grid w-56 gap-1 p-2">
+                          {item.children.map((child) => (
+                            <li key={child.href}>
+                              <NavigationMenuLink
+                                href={child.href}
+                                data-active={
+                                  pathname === child.href ? "" : undefined
+                                }
+                                className="text-sm data-active:text-gold-deep"
+                              >
+                                {child.label}
+                              </NavigationMenuLink>
+                            </li>
+                          ))}
+                        </ul>
+                      </NavigationMenuContent>
+                    </NavigationMenuItem>
+                  );
+                }
+                const link = item as { label: string; href: string };
                 return (
-                  <NavigationMenuItem key={item.label}>
-                    <NavigationMenuTrigger>
-                      {item.label}
-                    </NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <ul className="grid w-48 gap-1 p-2">
-                        {item.children.map((child) => (
-                          <li key={child.href}>
-                            <NavigationMenuLink
-                              href={child.href}
-                              data-active={pathname === child.href ? "" : undefined}
-                            >
-                              {child.label}
-                            </NavigationMenuLink>
-                          </li>
-                        ))}
-                      </ul>
-                    </NavigationMenuContent>
+                  <NavigationMenuItem key={link.label}>
+                    <NavigationMenuLink
+                      href={link.href}
+                      data-active={pathname === link.href ? "" : undefined}
+                      className={`inline-flex h-9 items-center justify-center rounded-lg px-2.5 py-1.5 transition-colors ${triggerClass}`}
+                    >
+                      {link.label}
+                    </NavigationMenuLink>
                   </NavigationMenuItem>
                 );
-              }
-              const link = item as { label: string; href: string };
-              return (
-                <NavigationMenuItem key={link.label}>
-                  <NavigationMenuLink
-                    href={link.href}
-                    data-active={pathname === link.href ? "" : undefined}
-                    className="inline-flex h-9 items-center justify-center rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-muted"
-                  >
-                    {link.label}
-                  </NavigationMenuLink>
-                </NavigationMenuItem>
-              );
-            })}
+              })}
           </NavigationMenuList>
         </NavigationMenu>
 
-        {/* Right side: Login + Mobile menu */}
-        <div className="flex items-center gap-2">
+        {/* Right side: Give + Login + Mobile menu */}
+        <div className="flex items-center gap-4">
           <Link
             href="/login"
-            className="hidden h-9 items-center justify-center rounded-lg bg-brand-gold px-4 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-gold-dark sm:inline-flex"
+            className="hidden text-[13px] font-medium uppercase tracking-wide text-ink-soft transition-colors hover:text-gold-deep sm:inline-block"
           >
             Login
+          </Link>
+          <Link
+            href="/give"
+            className="hidden h-10 items-center justify-center rounded-full bg-brand-gold px-6 text-sm font-semibold text-brand-navy transition-colors hover:bg-brand-gold-dark sm:inline-flex"
+          >
+            Give
           </Link>
           <Button
             variant="ghost"

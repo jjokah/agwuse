@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CHURCH_INFO } from "@/lib/constants";
+import { PageHero } from "@/components/public/page-hero";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
@@ -8,13 +9,14 @@ export const metadata: Metadata = {
 
 export default function TermsPage() {
   return (
-    <div className="px-4 py-12">
-      <div className="prose prose-lg mx-auto max-w-3xl dark:prose-invert">
-        <h1>Terms of Service</h1>
-        <p className="lead">
-          By using the {CHURCH_INFO.name} website and services, you agree to the
-          following terms.
-        </p>
+    <>
+      <PageHero
+        eyebrow="The Fine Print"
+        title="Terms of Service"
+        description={`By using the ${CHURCH_INFO.name} website and services, you agree to the following terms.`}
+      />
+      <div className="px-4 py-16 sm:py-20">
+        <div className="prose prose-lg mx-auto max-w-3xl">
         <p>
           <em>Last updated: March 2026</em>
         </p>
@@ -85,7 +87,8 @@ export default function TermsPage() {
           For questions about these terms, contact us at{" "}
           <a href={`mailto:${CHURCH_INFO.email}`}>{CHURCH_INFO.email}</a>.
         </p>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

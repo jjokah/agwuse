@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { prisma } from "@/lib/prisma";
+import { PageHero } from "@/components/public/page-hero";
+import { Eyebrow } from "@/components/public/section-heading";
 
 export const dynamic = "force-dynamic";
 
@@ -28,51 +31,73 @@ export default async function DepartmentsPage() {
     category: cat,
     label: CATEGORY_LABELS[cat] || cat,
     departments: departments.filter((d) => d.category === cat),
-  }));
+  })).filter((group) => group.departments.length > 0);
 
   return (
-    <div className="px-4 py-12">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-12 text-center">
-          <h1 className="mb-4 text-4xl font-bold">Departments</h1>
-          <p className="text-lg text-muted-foreground">
-            Our church operates through various departments and ministries,
-            each contributing to the growth and welfare of the congregation.
-          </p>
-        </div>
-
-        <div className="space-y-12">
-          {grouped.map(
-            (group) =>
-              group.departments.length > 0 && (
-                <section key={group.category}>
-                  <h2 className="mb-6 text-2xl font-bold">{group.label}</h2>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {group.departments.map((dept) => (
-                      <div
-                        key={dept.id}
-                        className="rounded-lg border bg-card p-5"
-                      >
-                        <h3 className="font-semibold">{dept.name}</h3>
-                        {dept.description && (
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {dept.description}
-                          </p>
-                        )}
-                        {dept.leader && (
-                          <p className="mt-2 text-xs text-brand-gold-dark">
-                            Led by {dept.leader.firstName}{" "}
-                            {dept.leader.lastName}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+    <>
+      <PageHero
+        eyebrow="Serve With Us"
+        title="Departments"
+        description="Our church operates through various departments and ministries, each contributing to the growth and welfare of the congregation."
+      />
+      <div className="px-4 py-20 sm:py-24">
+        <div className="mx-auto max-w-5xl space-y-16">
+          {grouped.map((group, groupIndex) => (
+            <div key={group.category}>
+              {/* Photo band midway to break up the card groups */}
+              {groupIndex === 2 && (
+                <div className="relative mb-16 overflow-hidden rounded-3xl shadow-warm">
+                  <Image
+                    src="/images/sections/choir.jpg"
+                    alt="The choir ministering at AG Wuse"
+                    width={1024}
+                    height={768}
+                    className="aspect-[16/6] w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/70 to-transparent" />
+                  <p className="font-display absolute bottom-5 left-6 text-xl font-medium text-white sm:text-2xl">
+                    Every gift has a place of service
+                  </p>
+                </div>
+              )}
+              <section>
+                <div className="mb-8 flex items-center gap-6">
+                  <div>
+                    <Eyebrow className="mb-2">
+                      {group.departments.length}{" "}
+                      {group.departments.length === 1 ? "department" : "departments"}
+                    </Eyebrow>
+                    <h2 className="font-display whitespace-nowrap text-3xl font-medium tracking-tight text-ink">
+                      {group.label}
+                    </h2>
                   </div>
-                </section>
-              )
-          )}
+                  <div className="mt-6 h-px flex-1 bg-border" />
+                </div>
+                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+                  {group.departments.map((dept) => (
+                    <div
+                      key={dept.id}
+                      className="flex flex-col rounded-3xl bg-paper p-6 shadow-warm"
+                    >
+                      <h3 className="font-medium text-ink">{dept.name}</h3>
+                      {dept.description && (
+                        <p className="mt-2 text-sm leading-relaxed text-ink-soft">
+                          {dept.description}
+                        </p>
+                      )}
+                      {dept.leader && (
+                        <p className="mt-auto pt-3 text-xs font-semibold uppercase tracking-[0.15em] text-gold-deep">
+                          Led by {dept.leader.firstName} {dept.leader.lastName}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          ))}
         </div>
       </div>
-    </div>
+    </>
   );
 }

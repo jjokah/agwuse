@@ -4,6 +4,7 @@ import { formatDate } from "@/lib/utils";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Megaphone } from "lucide-react";
+import { PageHero } from "@/components/public/page-hero";
 
 export const dynamic = "force-dynamic";
 
@@ -21,48 +22,56 @@ export default async function AnnouncementsPage() {
   });
 
   return (
-    <div className="px-4 py-12">
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-12 text-center">
-          <h1 className="mb-4 text-4xl font-bold">Announcements</h1>
-          <p className="text-lg text-muted-foreground">
-            Important updates and announcements from the church.
-          </p>
-        </div>
-
-        {announcements.length === 0 ? (
-          <EmptyState
-            icon={<Megaphone />}
-            title="No announcements"
-            description="There are no announcements at this time. Check back soon."
-          />
-        ) : (
-          <div className="space-y-4">
-            {announcements.map((post) => (
-              <div
-                key={post.id}
-                className="rounded-lg border bg-card p-6"
-              >
-                <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
-                  {post.publishedAt && (
-                    <span>{formatDate(post.publishedAt)}</span>
-                  )}
-                </div>
-                <h2 className="mb-2 text-lg font-semibold">{post.title}</h2>
-                {post.excerpt && (
-                  <p className="text-muted-foreground">{post.excerpt}</p>
-                )}
-                {post.content && !post.excerpt && (
-                  <div
-                    className="prose prose-sm max-w-none text-muted-foreground dark:prose-invert"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }}
+    <>
+      <PageHero
+        eyebrow="Stay Informed"
+        title="Announcements"
+        description="Important updates and announcements from the church."
+      />
+      <div className="px-4 py-20 sm:py-24">
+        <div className="mx-auto max-w-3xl">
+          {announcements.length === 0 ? (
+            <EmptyState
+              icon={<Megaphone />}
+              title="No announcements"
+              description="There are no announcements at this time. Check back soon."
+            />
+          ) : (
+            <ol className="relative space-y-10 border-l border-border pl-8">
+              {announcements.map((post) => (
+                <li key={post.id} className="relative">
+                  <span
+                    aria-hidden
+                    className="absolute -left-[38.5px] top-1.5 size-2.5 rounded-full bg-brand-gold ring-4 ring-gold-soft"
                   />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+                  {post.publishedAt && (
+                    <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gold-deep">
+                      {formatDate(post.publishedAt)}
+                    </p>
+                  )}
+                  <h2 className="font-display mt-2 text-2xl font-medium tracking-tight text-ink">
+                    {post.title}
+                  </h2>
+                  {post.excerpt ? (
+                    <p className="mt-3 leading-relaxed text-ink-soft">
+                      {post.excerpt}
+                    </p>
+                  ) : (
+                    post.content && (
+                      <div
+                        className="prose prose-sm mt-3 max-w-none"
+                        dangerouslySetInnerHTML={{
+                          __html: sanitizeHtml(post.content),
+                        }}
+                      />
+                    )
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

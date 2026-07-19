@@ -1,105 +1,194 @@
 import Image from "next/image";
 import Link from "next/link";
-import { CHURCH_INFO, WEEKLY_ACTIVITIES } from "@/lib/constants";
+import type { Event, Sermon } from "@prisma/client";
+import { ArrowRight } from "lucide-react";
+import { prisma } from "@/lib/prisma";
+import { CHURCH_INFO } from "@/lib/constants";
+import { HomeHero } from "@/components/public/home-hero";
+import { ServiceTimesStrip } from "@/components/public/service-times-strip";
+import { SectionHeading } from "@/components/public/section-heading";
+import { EventCard } from "@/components/public/event-card";
+import { SermonCard } from "@/components/public/sermon-card";
+import { ScriptureQuote } from "@/components/public/scripture-quote";
+import { CTABanner } from "@/components/public/cta-banner";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+
+const MINISTRY_TILES = [
+  {
+    title: "Worship & Choir",
+    image: "/images/sections/choir.jpg",
+    href: "/departments",
+  },
+  {
+    title: "Children's Church",
+    image: "/images/sections/children.jpg",
+    href: "/departments",
+  },
+  {
+    title: "Weekly Activities",
+    image: "/images/gallery/ag-wuse-03.jpg",
+    href: "/activities",
+  },
+];
+
+async function getHomeContent() {
+  try {
+    const [events, sermon] = await Promise.all([
+      prisma.event.findMany({
+        where: { isPublished: true, startDate: { gte: new Date() } },
+        orderBy: { startDate: "asc" },
+        take: 3,
+      }),
+      prisma.sermon.findFirst({ orderBy: { date: "desc" } }),
+    ]);
+    return { events, sermon };
+  } catch {
+    return { events: [] as Event[], sermon: null as Sermon | null };
+  }
+}
+
+export default async function HomePage() {
+  const { events, sermon } = await getHomeContent();
+
   return (
     <>
-      {/* Hero Section */}
-      <section className="relative flex min-h-[600px] items-center justify-center bg-brand-navy px-4 text-white">
-        <div className="absolute inset-0 bg-gradient-to-b from-brand-navy/90 to-brand-navy/70" />
-        <div className="relative z-10 mx-auto max-w-4xl text-center">
-          <Image
-            src="/ag-logo.png"
-            alt="AG Wuse Church Logo"
-            width={120}
-            height={120}
-            className="mx-auto mb-6"
-            priority
-          />
-          <h1 className="mb-4 text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">
-            Welcome to {CHURCH_INFO.shortName}
-          </h1>
-          <p className="mb-2 text-xl text-brand-gold-light sm:text-2xl">
-            {CHURCH_INFO.tagline}
-          </p>
-          <p className="mb-8 text-lg text-gray-300">{CHURCH_INFO.name}</p>
-          <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+      <HomeHero />
+      <ServiceTimesStrip />
+
+      {/* Welcome */}
+      <section className="px-4 py-20 sm:py-28">
+        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[2fr_3fr]">
+          <div className="relative mx-auto w-full max-w-md">
+            <div
+              aria-hidden
+              className="absolute -left-4 -top-4 h-full w-full rounded-3xl border-2 border-brand-gold"
+            />
+            <Image
+              src="/images/sections/outreach.jpg"
+              alt="Community outreach at AG Wuse"
+              width={640}
+              height={800}
+              className="relative aspect-[4/5] w-full rounded-3xl object-cover shadow-warm"
+            />
+          </div>
+          <div>
+            <SectionHeading
+              eyebrow="Welcome Home"
+              title="A family of faith in the heart of Abuja"
+            />
+            <p className="mt-6 max-w-xl leading-relaxed text-ink-soft">
+              {CHURCH_INFO.name} is a vibrant community of believers committed
+              to the Word of God, worship, and service. From Sunday worship to
+              medical outreaches in our city, we welcome you to join us as we
+              grow together in faith.
+            </p>
             <Link
               href="/about"
-              className="inline-flex h-11 items-center justify-center rounded-lg bg-brand-gold px-6 text-sm font-medium text-brand-navy transition-colors hover:bg-brand-gold-dark"
+              className="mt-8 inline-flex items-center gap-2 text-sm font-semibold text-gold-deep transition-colors hover:text-brand-gold-dark"
             >
-              Learn More
-            </Link>
-            <Link
-              href="/give"
-              className="inline-flex h-11 items-center justify-center rounded-lg border border-brand-gold px-6 text-sm font-medium text-brand-gold transition-colors hover:bg-brand-gold/10"
-            >
-              Give Online
+              Our story
+              <ArrowRight className="size-4" />
             </Link>
           </div>
         </div>
       </section>
 
-      {/* Service Times */}
-      <section className="border-b bg-brand-gold px-4 py-6 text-brand-navy">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-6 text-sm font-medium sm:text-base">
-          {WEEKLY_ACTIVITIES.map((activity) => (
-            <div key={activity.day} className="flex items-center gap-2">
-              <span className="font-bold">{activity.day}:</span>
-              <span>{activity.activity}</span>
-              <span className="text-brand-navy/70">({activity.time})</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Quick Info Section */}
-      <section className="px-4 py-16">
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-12 text-center">
-            <h2 className="mb-4 text-3xl font-bold">Welcome Home</h2>
-            <p className="mx-auto max-w-2xl text-muted-foreground">
-              {CHURCH_INFO.name} is a vibrant community of believers committed
-              to the Word of God, worship, and service. We welcome you to join
-              us as we grow together in faith.
-            </p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              {
-                title: "Join Us",
-                description:
-                  "Become a member and grow in fellowship with us.",
-                href: "/join",
-              },
-              {
-                title: "Give",
-                description:
-                  "Support the work of God through tithes, offerings, and donations.",
-                href: "/give",
-              },
-              {
-                title: "Prayer Request",
-                description:
-                  "Share your prayer needs with us. We believe in the power of prayer.",
-                href: "/prayer-request",
-              },
-            ].map((item) => (
+      {/* Upcoming events */}
+      {events.length > 0 && (
+        <section className="px-4 pb-20 sm:pb-28">
+          <div className="mx-auto max-w-7xl">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <SectionHeading eyebrow="What's Happening" title="Upcoming events" />
               <Link
-                key={item.title}
-                href={item.href}
-                className="group rounded-lg border bg-card p-6 transition-colors hover:border-brand-gold hover:bg-accent"
+                href="/events"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-gold-deep transition-colors hover:text-brand-gold-dark"
               >
-                <h3 className="mb-2 text-xl font-semibold group-hover:text-brand-gold-dark">
-                  {item.title}
-                </h3>
-                <p className="text-muted-foreground">{item.description}</p>
+                All events
+                <ArrowRight className="size-4" />
+              </Link>
+            </div>
+            <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {events.map((event) => (
+                <EventCard key={event.id} event={event} variant="featured" />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Latest sermon */}
+      {sermon && (
+        <section className="bg-cream-deep px-4 py-20 sm:py-28">
+          <div className="mx-auto max-w-5xl">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <SectionHeading eyebrow="The Word" title="Latest sermon" />
+              <Link
+                href="/sermons"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-gold-deep transition-colors hover:text-brand-gold-dark"
+              >
+                All sermons
+                <ArrowRight className="size-4" />
+              </Link>
+            </div>
+            <div className="mt-10">
+              <SermonCard sermon={sermon} />
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Ministries preview */}
+      <section className="px-4 py-20 sm:py-28">
+        <div className="mx-auto max-w-7xl">
+          <SectionHeading
+            eyebrow="Find Your Place"
+            title="There is room for you here"
+            description="Twenty-three departments serve every age and calling, from the choir to children's church to missions and outreach."
+            align="center"
+          />
+          <div className="mt-12 grid gap-6 sm:grid-cols-3">
+            {MINISTRY_TILES.map((tile) => (
+              <Link
+                key={tile.title}
+                href={tile.href}
+                className="group relative overflow-hidden rounded-3xl shadow-warm"
+              >
+                <Image
+                  src={tile.image}
+                  alt={tile.title}
+                  width={600}
+                  height={750}
+                  className="aspect-[4/5] w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/85 via-brand-navy/20 to-transparent" />
+                <div className="absolute inset-x-0 bottom-0 flex items-center justify-between p-6">
+                  <h3 className="font-display text-xl font-medium tracking-tight text-white">
+                    {tile.title}
+                  </h3>
+                  <ArrowRight className="size-5 text-brand-gold transition-transform group-hover:translate-x-1" />
+                </div>
               </Link>
             ))}
           </div>
         </div>
       </section>
+
+      {/* Scripture moment */}
+      <section className="pb-20 sm:pb-28">
+        <ScriptureQuote
+          verse="Behold, how good and how pleasant it is for brethren to dwell together in unity!"
+          reference="Psalm 133:1"
+        />
+      </section>
+
+      <CTABanner
+        eyebrow="New Here?"
+        title="We would love to meet you"
+        description="Become a member, share a prayer request, or simply worship with us this week. The doors are open."
+        primary={{ label: "Join Us", href: "/join" }}
+        secondary={{ label: "Send a Prayer Request", href: "/prayer-request" }}
+      />
     </>
   );
 }

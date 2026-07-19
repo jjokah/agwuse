@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
-import { Radio } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { CHURCH_INFO } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
+import { PageHero } from "@/components/public/page-hero";
+import { ServiceTimesStrip } from "@/components/public/service-times-strip";
 
 export const dynamic = "force-dynamic";
 
@@ -38,63 +41,69 @@ export default async function LivePage() {
   const hasStream = isLive && (youtubeUrl || facebookUrl);
 
   return (
-    <div className="px-4 py-12">
-      <div className="mx-auto max-w-4xl">
-        <div className="mb-12 text-center">
-          <h1 className="mb-4 text-4xl font-bold">
-            {config?.title || "Live Stream"}
-          </h1>
-          <p className="text-lg text-muted-foreground">
-            {config?.description ||
-              "Join our services from anywhere. Watch live or catch up on recent broadcasts."}
-          </p>
-        </div>
-
-        {hasStream ? (
-          <div className="mb-8 space-y-6">
-            {youtubeUrl && (
-              <iframe
-                className="aspect-video w-full rounded-lg"
-                src={youtubeUrl}
-                title="YouTube Live Stream"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            )}
-            {facebookUrl && (
-              <iframe
-                className="aspect-video w-full rounded-lg"
-                src={facebookUrl}
-                title="Facebook Live Stream"
-                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
-                allowFullScreen
-              />
-            )}
-          </div>
-        ) : (
-          <div className="mb-8 flex aspect-video items-center justify-center rounded-lg border-2 border-dashed bg-muted">
-            <div className="text-center">
-              <Radio className="mx-auto mb-4 size-12 text-muted-foreground" />
-              <h2 className="text-lg font-semibold">No Live Stream</h2>
-              <p className="text-sm text-muted-foreground">
-                The live stream will be available during service times.
-              </p>
+    <>
+      <PageHero
+        eyebrow="Worship From Anywhere"
+        title={config?.title || "Live Stream"}
+        description={
+          config?.description ||
+          "Join our services from anywhere. Watch live or catch up on recent broadcasts."
+        }
+      />
+      <div className="px-4 py-20 sm:py-24">
+        <div className="mx-auto max-w-4xl">
+          {hasStream ? (
+            <div className="mb-14 space-y-6">
+              {youtubeUrl && (
+                <iframe
+                  className="aspect-video w-full rounded-3xl shadow-warm"
+                  src={youtubeUrl}
+                  title="YouTube Live Stream"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              )}
+              {facebookUrl && (
+                <iframe
+                  className="aspect-video w-full rounded-3xl shadow-warm"
+                  src={facebookUrl}
+                  title="Facebook Live Stream"
+                  allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
+                  allowFullScreen
+                />
+              )}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="mb-14 flex aspect-video w-full flex-col items-center justify-center rounded-3xl bg-brand-navy px-6 text-center shadow-warm">
+              <span className="flex items-center gap-2.5 rounded-full border border-white/15 px-4 py-1.5">
+                <span className="relative flex size-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-gold opacity-60" />
+                  <span className="relative inline-flex size-2.5 rounded-full bg-brand-gold" />
+                </span>
+                <span className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-gold">
+                  Currently Offline
+                </span>
+              </span>
+              <h2 className="font-display mt-6 text-2xl font-medium tracking-tight text-white sm:text-3xl">
+                We will see you at the next service
+              </h2>
+              <p className="mt-3 max-w-md text-sm leading-relaxed text-white/70">
+                The live stream typically begins a few minutes before the
+                service starts. In the meantime, catch up on past messages.
+              </p>
+              <Link
+                href="/sermons"
+                className="mt-7 inline-flex h-11 items-center gap-2 rounded-full bg-brand-gold px-7 text-sm font-semibold text-brand-navy transition-colors hover:bg-brand-gold-light"
+              >
+                Browse Sermons
+                <ArrowRight className="size-4" />
+              </Link>
+            </div>
+          )}
 
-        {/* Service Times Reminder */}
-        <div className="rounded-lg bg-muted p-6 text-center">
-          <h3 className="mb-2 font-semibold">Service Times</h3>
-          <p className="text-muted-foreground">
-            <strong>Sunday Service / Sunday School:</strong> 8:00 AM
-          </p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            The live stream typically begins a few minutes before the service
-            starts.
-          </p>
+          <ServiceTimesStrip variant="inline" />
         </div>
       </div>
-    </div>
+    </>
   );
 }

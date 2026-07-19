@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Calendar, MapPin, Clock } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { formatDate, formatDateTime } from "@/lib/utils";
+import { MediaImage } from "@/components/public/media-image";
 
 export async function generateMetadata({
   params,
@@ -16,7 +17,11 @@ export async function generateMetadata({
   });
 
   if (!event) return { title: "Event Not Found" };
-  return { title: event.title, description: event.description || undefined };
+  return {
+    title: event.title,
+    description: event.description || undefined,
+    openGraph: event.imageUrl ? { images: [event.imageUrl] } : undefined,
+  };
 }
 
 export default async function EventDetailPage({
@@ -34,46 +39,60 @@ export default async function EventDetailPage({
   const isPast = (event.endDate ?? event.startDate) < new Date();
 
   return (
-    <div className="px-4 py-12">
+    <div className="px-4 py-16 sm:py-20">
       <div className="mx-auto max-w-3xl">
         <Link
           href="/events"
-          className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          className="mb-10 inline-flex items-center gap-1.5 text-sm font-medium text-ink-soft transition-colors hover:text-gold-deep"
         >
           <ArrowLeft className="size-4" />
           Back to Events
         </Link>
 
-        <h1 className="mb-4 text-3xl font-bold sm:text-4xl">{event.title}</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gold-deep">
+          {isPast ? "Past Event" : "Upcoming Event"}
+        </p>
+        <h1 className="font-display mt-3 text-4xl font-medium tracking-tight text-ink sm:text-5xl">
+          {event.title}
+        </h1>
 
-        {isPast && (
-          <div className="mb-4 inline-block rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
-            Past Event
-          </div>
-        )}
+        <MediaImage
+          src={event.imageUrl}
+          alt={event.title}
+          aspect="video"
+          priority
+          sizes="(max-width: 768px) 100vw, 768px"
+          className="mt-10 rounded-3xl shadow-warm"
+        />
 
-        <div className="mb-8 space-y-3">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Calendar className="size-4" />
-            <span>{formatDate(event.startDate)}</span>
-            {event.endDate && event.endDate.toDateString() !== event.startDate.toDateString() && (
-              <span>— {formatDate(event.endDate)}</span>
-            )}
+        <div className="mt-10 flex flex-col gap-4 rounded-3xl bg-paper p-6 shadow-warm sm:flex-row sm:items-center sm:gap-10">
+          <div className="flex items-center gap-3">
+            <Calendar className="size-5 shrink-0 text-gold-deep" />
+            <span className="text-sm text-ink">
+              {formatDate(event.startDate)}
+              {event.endDate &&
+                event.endDate.toDateString() !==
+                  event.startDate.toDateString() && (
+                  <> to {formatDate(event.endDate)}</>
+                )}
+            </span>
           </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Clock className="size-4" />
-            <span>{formatDateTime(event.startDate)}</span>
+          <div className="flex items-center gap-3">
+            <Clock className="size-5 shrink-0 text-gold-deep" />
+            <span className="text-sm text-ink">
+              {formatDateTime(event.startDate)}
+            </span>
           </div>
           {event.location && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <MapPin className="size-4" />
-              <span>{event.location}</span>
+            <div className="flex items-center gap-3">
+              <MapPin className="size-5 shrink-0 text-gold-deep" />
+              <span className="text-sm text-ink">{event.location}</span>
             </div>
           )}
         </div>
 
         {event.description && (
-          <div className="prose prose-lg max-w-none dark:prose-invert">
+          <div className="prose prose-lg mt-10 max-w-none">
             <p>{event.description}</p>
           </div>
         )}
