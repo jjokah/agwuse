@@ -61,8 +61,8 @@ export function PublicFooter() {
               </Link>
             </li>
             <li>
-              <Link href="/ministers" className="transition-colors hover:text-brand-gold">
-                Ministers
+              <Link href="/leaders" className="transition-colors hover:text-brand-gold">
+                Leaders
               </Link>
             </li>
             <li>

@@ -93,8 +93,7 @@ export const NAV_ITEMS = {
       label: "About",
       children: [
         { label: "About / Beliefs", href: "/about" },
-        { label: "Ministers", href: "/ministers" },
-        { label: "Church Board", href: "/board" },
+        { label: "Leaders", href: "/leaders" },
       ],
     },
     {

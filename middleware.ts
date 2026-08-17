@@ -7,8 +7,7 @@ const { auth } = NextAuth(authConfig);
 const publicRoutes = [
   "/",
   "/about",
-  "/ministers",
-  "/board",
+  "/leaders",
   "/departments",
   "/activities",
   "/blog",

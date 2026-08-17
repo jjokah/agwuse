@@ -37,7 +37,7 @@ A comprehensive church management web application providing a public-facing webs
 ### Public Website (18 routes)
 - Home page with hero section, service times, latest news, and upcoming events
 - About / Statement of Faith (16 Assemblies of God doctrines)
-- Ministers and Church Board profiles
+- Leaders page combining ministers, church board, and departmental heads
 - Departments & Ministries directory (23 departments)
 - Weekly Activities schedule
 - Blog / Church News with rich text content
@@ -181,6 +181,13 @@ cp .env.example .env
 
 Edit `.env` with your values (see [Environment Variables](#environment-variables) below).
 
+> **The app will not start without `.env`.** It is gitignored, so a fresh clone has no
+> `.env` at all — `DATABASE_URL` is then `undefined` and every Prisma query fails with
+> `ECONNREFUSED`. See [Troubleshooting](#troubleshooting).
+>
+> Note the database port: `docker-compose.yml` maps PostgreSQL to host port **5433**,
+> not the default 5432. The values in `.env.example` already match.
+
 ### 4. Start the database
 
 ```bash
@@ -291,6 +298,67 @@ Route protection is enforced at the middleware level. API actions use `requireAu
 | `npm run db:generate` | Generate Prisma Client |
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run db:seed` | Seed database |
+
+---
+
+## Troubleshooting
+
+### Pages using the database fail with `PrismaClientKnownRequestError`
+
+Symptom — a DB-backed page (`/departments`, `/leaders`, `/blog`, the dashboard, login)
+shows a Next.js error overlay like:
+
+```
+Invalid `prisma.department.findMany()` invocation in ...
+```
+
+...often with **no message body after it**. The empty body is the tell: it means the
+connection was refused before any query ran (`code: ECONNREFUSED`), not that the query
+is malformed. Static pages (`/`, `/about`, `/contact`) keep working, which can make it
+look page-specific when it is not.
+
+Check, in order:
+
+1. **Does `.env` exist?** It is gitignored, so a fresh clone has none.
+   `src/lib/prisma.ts` reads `process.env.DATABASE_URL!` with no fallback — if unset,
+   `pg` silently tries `localhost:5432` and is refused.
+   ```bash
+   cp .env.example .env
+   ```
+2. **Is the database container running?**
+   ```bash
+   docker compose up -d db
+   docker ps --filter name=agwuse-db
+   ```
+3. **Is `DATABASE_URL` on the right port?** Docker maps PostgreSQL to **5433**, not
+   5432. A URL ending in `:5432/agwuse` is refused unless you also run a local Postgres.
+4. **Confirm the port is actually listening:**
+   ```bash
+   # PowerShell
+   (Test-NetConnection localhost -Port 5433).TcpTestSucceeded
+   ```
+5. **Have migrations been applied?** A reachable but empty database throws a different
+   error (`P2021: table does not exist`). Fix with `npm run db:migrate && npm run db:seed`.
+
+### `/leaders` renders, but the "Departmental Heads" section is missing
+
+This is expected, not a failure. Ministers and the church board on `/leaders` are static
+content in the page file; **departmental heads are read from the database** — only
+departments that are `isActive` *and* have a `leaderId` assigned appear, and the whole
+section is hidden when none match.
+
+Assign leaders under **Admin → Settings → Departments → [department] → Leader**. The
+seed creates 23 departments but does not assign leaders to them.
+
+Note that this query is deliberately wrapped in a `try/catch` that falls back to an empty
+list, so a database outage hides that one section instead of taking down the static
+ministers and board content with it. If the section is unexpectedly empty, check the
+server console for `Failed to load departmental heads:` before assuming it is a data issue.
+
+### Docker command not found
+
+Docker Desktop must be running, and its CLI must be on `PATH`. If `docker ps` fails in
+your shell but Docker Desktop is open, restart the terminal so it picks up `PATH`.
 
 ---
 
