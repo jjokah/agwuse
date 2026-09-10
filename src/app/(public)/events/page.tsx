@@ -6,38 +6,49 @@ import { PageHero } from "@/components/public/page-hero";
 import { SectionHeading } from "@/components/public/section-heading";
 import { EventCard } from "@/components/public/event-card";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Events",
   description: "Upcoming events and programs at AG Wuse Church.",
 };
 
-export default async function EventsPage() {
+async function getEventsData() {
   const now = new Date();
-  const events = await prisma.event.findMany({
-    where: {
-      isPublished: true,
-      OR: [
-        { endDate: { gte: now } },
-        { endDate: null, startDate: { gte: now } },
-      ],
-    },
-    orderBy: { startDate: "asc" },
-    take: 20,
-  });
+  try {
+    const [events, pastEvents] = await Promise.all([
+      prisma.event.findMany({
+        where: {
+          isPublished: true,
+          OR: [
+            { endDate: { gte: now } },
+            { endDate: null, startDate: { gte: now } },
+          ],
+        },
+        orderBy: { startDate: "asc" },
+        take: 20,
+      }),
+      prisma.event.findMany({
+        where: {
+          isPublished: true,
+          OR: [
+            { endDate: { lt: now } },
+            { endDate: null, startDate: { lt: now } },
+          ],
+        },
+        orderBy: { startDate: "desc" },
+        take: 6,
+      }),
+    ]);
+    return { events, pastEvents };
+  } catch (err) {
+    console.error("Failed to load events:", err);
+    return { events: [], pastEvents: [] };
+  }
+}
 
-  const pastEvents = await prisma.event.findMany({
-    where: {
-      isPublished: true,
-      OR: [
-        { endDate: { lt: now } },
-        { endDate: null, startDate: { lt: now } },
-      ],
-    },
-    orderBy: { startDate: "desc" },
-    take: 6,
-  });
+export default async function EventsPage() {
+  const { events, pastEvents } = await getEventsData();
 
   return (
     <>

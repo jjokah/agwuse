@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHero } from "@/components/public/page-hero";
 import { ServiceTimesStrip } from "@/components/public/service-times-strip";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30;
 
 export const metadata: Metadata = {
   title: "Live Stream",
@@ -24,10 +24,19 @@ function isAllowedEmbedUrl(url: string): boolean {
   return ALLOWED_EMBED_PREFIXES.some((prefix) => url.startsWith(prefix));
 }
 
+async function getLiveStreamConfig() {
+  try {
+    return await prisma.liveStreamConfig.findUnique({
+      where: { id: "default" },
+    });
+  } catch (err) {
+    console.error("Failed to load live stream config:", err);
+    return null;
+  }
+}
+
 export default async function LivePage() {
-  const config = await prisma.liveStreamConfig.findUnique({
-    where: { id: "default" },
-  });
+  const config = await getLiveStreamConfig();
 
   const isLive = config?.isLive ?? false;
   const youtubeUrl =

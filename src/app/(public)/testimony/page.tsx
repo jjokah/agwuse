@@ -6,20 +6,28 @@ import { PageHero } from "@/components/public/page-hero";
 import { ScriptureQuote } from "@/components/public/scripture-quote";
 import { SectionHeading } from "@/components/public/section-heading";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Share Testimony",
   description: "Share your testimony of what God has done in your life.",
 };
 
+async function getTestimonies() {
+  try {
+    return await prisma.submission.findMany({
+      where: { type: "TESTIMONY", status: "APPROVED", isPublic: true },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    });
+  } catch (err) {
+    console.error("Failed to load testimonies:", err);
+    return [];
+  }
+}
+
 export default async function TestimonyPage() {
-  // Fetch approved public testimonies
-  const testimonies = await prisma.submission.findMany({
-    where: { type: "TESTIMONY", status: "APPROVED", isPublic: true },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
+  const testimonies = await getTestimonies();
 
   return (
     <>

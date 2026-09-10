@@ -60,13 +60,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // callbacks (jwt, session) inherited from authConfig
 });
 
-type UserRole =
-  | "VISITOR"
-  | "MEMBER"
-  | "DEPT_LEAD"
-  | "FINANCE"
-  | "ADMIN"
-  | "SUPER_ADMIN";
+import { type UserRole } from "@/lib/constants";
 
 export async function requireAuth() {
   const session = await auth();

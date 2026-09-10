@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod/v4";
+import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
 
 const schema = z.object({
   email: z.email({ error: "Valid email is required" }),
@@ -11,6 +12,14 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("paystack_init", ip, 10, "60 s");
+  if (!limitCheck.success) {
+    return NextResponse.json(
+      { error: "Too many payment initialization attempts. Please wait a minute." },
+      { status: 429 }
+    );
+  }
   const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
   if (!paystackSecretKey) {
     return NextResponse.json(

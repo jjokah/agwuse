@@ -5,20 +5,29 @@ import { FileText } from "lucide-react";
 import { PageHero } from "@/components/public/page-hero";
 import { BlogCard } from "@/components/public/blog-card";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Blog",
   description: "Read the latest articles, news, and updates from AG Wuse Church.",
 };
 
+async function getBlogPosts() {
+  try {
+    return await prisma.blogPost.findMany({
+      where: { published: true, type: { in: ["BLOG", "NEWS"] } },
+      orderBy: { publishedAt: "desc" },
+      include: { author: { select: { firstName: true, lastName: true } } },
+      take: 20,
+    });
+  } catch (err) {
+    console.error("Failed to load blog posts:", err);
+    return [];
+  }
+}
+
 export default async function BlogPage() {
-  const posts = await prisma.blogPost.findMany({
-    where: { published: true, type: { in: ["BLOG", "NEWS"] } },
-    orderBy: { publishedAt: "desc" },
-    include: { author: { select: { firstName: true, lastName: true } } },
-    take: 20,
-  });
+  const posts = await getBlogPosts();
 
   const [featured, ...rest] = posts;
 

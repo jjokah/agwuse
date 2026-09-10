@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://agwuse.magnisale.com";
 
@@ -34,31 +34,45 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: route === "" ? 1 : 0.8,
   }));
 
-  // Dynamic blog posts
-  const posts = await prisma.blogPost.findMany({
-    where: { published: true },
-    select: { slug: true, updatedAt: true },
-  });
+  // Dynamic blog posts (bounded query)
+  let blogRoutes: MetadataRoute.Sitemap = [];
+  try {
+    const posts = await prisma.blogPost.findMany({
+      where: { published: true },
+      select: { slug: true, updatedAt: true },
+      orderBy: { publishedAt: "desc" },
+      take: 5000,
+    });
 
-  const blogRoutes = posts.map((post) => ({
-    url: `${BASE_URL}/blog/${post.slug}`,
-    lastModified: post.updatedAt,
-    changeFrequency: "monthly" as const,
-    priority: 0.6,
-  }));
+    blogRoutes = posts.map((post) => ({
+      url: `${BASE_URL}/blog/${post.slug}`,
+      lastModified: post.updatedAt,
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    }));
+  } catch (err) {
+    console.error("Failed to load blog posts for sitemap:", err);
+  }
 
-  // Dynamic events
-  const events = await prisma.event.findMany({
-    where: { isPublished: true },
-    select: { id: true, updatedAt: true },
-  });
+  // Dynamic events (bounded query)
+  let eventRoutes: MetadataRoute.Sitemap = [];
+  try {
+    const events = await prisma.event.findMany({
+      where: { isPublished: true },
+      select: { id: true, updatedAt: true },
+      orderBy: { startDate: "desc" },
+      take: 1000,
+    });
 
-  const eventRoutes = events.map((event) => ({
-    url: `${BASE_URL}/events/${event.id}`,
-    lastModified: event.updatedAt,
-    changeFrequency: "monthly" as const,
-    priority: 0.6,
-  }));
+    eventRoutes = events.map((event) => ({
+      url: `${BASE_URL}/events/${event.id}`,
+      lastModified: event.updatedAt,
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    }));
+  } catch (err) {
+    console.error("Failed to load events for sitemap:", err);
+  }
 
   return [...staticRoutes, ...blogRoutes, ...eventRoutes];
 }

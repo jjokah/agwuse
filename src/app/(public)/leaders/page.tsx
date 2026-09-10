@@ -4,7 +4,7 @@ import { PageHero } from "@/components/public/page-hero";
 import { SectionHeading } from "@/components/public/section-heading";
 import { PersonCard } from "@/components/public/person-card";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Leaders",

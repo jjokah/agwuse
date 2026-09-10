@@ -207,6 +207,7 @@ model User {
   @@index([role])
   @@index([status])
   @@index([departmentId])
+  @@index([firstName, lastName])
   @@map("users")
 }
 
@@ -247,7 +248,7 @@ model FinancialTransaction {
   paystackRef     String?
 
   memberId     String?
-  member       User?   @relation("TransactionMember", fields: [memberId], references: [id])
+  member       User?   @relation("TransactionMember", fields: [memberId], references: [id], onDelete: SetNull)
   recordedById String
   recordedBy   User    @relation("TransactionRecordedBy", fields: [recordedById], references: [id])
 
@@ -263,6 +264,7 @@ model FinancialTransaction {
   @@index([category])
   @@index([recordedById])
   @@index([date, type])
+  @@index([paystackRef])
   @@map("financial_transactions")
 }
 
@@ -349,6 +351,7 @@ model Event {
 
   @@index([startDate])
   @@index([type])
+  @@index([isPublished, startDate])
   @@map("events")
 }
 

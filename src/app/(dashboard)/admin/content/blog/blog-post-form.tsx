@@ -13,9 +13,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RichTextEditor } from "@/components/forms/rich-text-editor";
+import dynamic from "next/dynamic";
 import { createBlogPost, updateBlogPost } from "@/lib/actions/content-actions";
 import { toast } from "sonner";
+
+const RichTextEditor = dynamic(
+  () => import("@/components/forms/rich-text-editor").then((mod) => mod.RichTextEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[250px] rounded-md border border-input bg-muted/20 p-4 flex items-center justify-center text-sm text-muted-foreground">
+        Loading editor...
+      </div>
+    ),
+  }
+);
 
 interface BlogPostFormProps {
   post?: {

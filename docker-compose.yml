@@ -4,11 +4,11 @@ services:
     container_name: agwuse-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: agwuse
-      POSTGRES_PASSWORD: agwuse_dev_2026
-      POSTGRES_DB: agwuse
+      POSTGRES_USER: ${POSTGRES_USER:-agwuse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-agwuse_dev_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-agwuse}
     ports:
-      - "5433:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - agwuse_pgdata:/var/lib/postgresql/data
 

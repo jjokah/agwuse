@@ -20,7 +20,17 @@ export async function POST(request: Request) {
     .update(body)
     .digest("hex");
 
-  if (hash !== signature) {
+  if (!signature) {
+    return NextResponse.json({ error: "Missing signature" }, { status: 401 });
+  }
+
+  const hashBuffer = Buffer.from(hash, "utf-8");
+  const signatureBuffer = Buffer.from(signature, "utf-8");
+
+  if (
+    hashBuffer.length !== signatureBuffer.length ||
+    !crypto.timingSafeEqual(hashBuffer, signatureBuffer)
+  ) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 

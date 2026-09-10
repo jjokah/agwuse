@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { z } from "zod/v4";
+import { transactionSchema, pledgeSchema } from "@/lib/validations/finance";
 import { formatReceiptNumber } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
 
@@ -18,19 +18,6 @@ async function generateReceiptNumber(): Promise<string> {
   const lastSeq = match ? parseInt(match[1], 10) : 0;
   return formatReceiptNumber(year, lastSeq + 1);
 }
-
-const transactionSchema = z.object({
-  type: z.enum(["TITHE", "OFFERING", "DONATION", "PLEDGE_PAYMENT", "EXPENSE"]),
-  amount: z.coerce.number().positive({ error: "Amount must be positive" }),
-  paymentMethod: z.enum(["CASH", "BANK_TRANSFER", "POS", "MOBILE_MONEY", "ONLINE"]),
-  date: z.string().min(1, { error: "Date is required" }),
-  memberId: z.string().optional(),
-  offeringCategory: z.string().optional(),
-  categoryId: z.string().optional(),
-  referenceNumber: z.string().optional(),
-  notes: z.string().optional(),
-  pledgeId: z.string().optional(),
-});
 
 export async function createTransaction(formData: FormData) {
   const session = await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
@@ -54,19 +41,27 @@ export async function createTransaction(formData: FormData) {
   }
 
   const data = parsed.data;
-  const receiptNumber = await generateReceiptNumber();
 
   // Resolve expense category name if categoryId is provided
   let expenseCategoryName: string | null = null;
   if (data.type === "EXPENSE" && data.categoryId) {
-    const expCat = await prisma.financialCategory.findUnique({
-      where: { id: data.categoryId },
-      select: { name: true },
-    });
-    expenseCategoryName = expCat?.name ?? null;
+    try {
+      const expCat = await prisma.financialCategory.findUnique({
+        where: { id: data.categoryId },
+        select: { name: true },
+      });
+      expenseCategoryName = expCat?.name ?? null;
+    } catch {
+      expenseCategoryName = null;
+    }
   }
 
-  const transaction = await prisma.$transaction(async (tx) => {
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      const receiptNumber = await generateReceiptNumber();
+
+      const transaction = await prisma.$transaction(async (tx) => {
     const txn = await tx.financialTransaction.create({
       data: {
         type: data.type,
@@ -120,20 +115,25 @@ export async function createTransaction(formData: FormData) {
     },
   });
 
-  revalidatePath("/admin/finance");
-  revalidatePath("/finance");
-  revalidatePath("/my-giving");
+      revalidatePath("/admin/finance");
+      revalidatePath("/finance");
+      revalidatePath("/my-giving");
 
-  return { success: true, receiptNumber };
+      return { success: true, receiptNumber };
+    } catch (err: unknown) {
+      const isUniqueViolation =
+        err instanceof Error && err.message.includes("Unique constraint");
+      if (isUniqueViolation && retries > 1) {
+        retries--;
+        continue;
+      }
+      console.error("createTransaction error:", err);
+      return { success: false, error: "Failed to record transaction. Please try again." };
+    }
+  }
+
+  return { success: false, error: "Could not generate a unique receipt number. Please try again." };
 }
-
-const pledgeSchema = z.object({
-  title: z.string().min(2, { error: "Title is required" }),
-  amount: z.coerce.number().positive({ error: "Amount must be positive" }),
-  startDate: z.string().min(1, { error: "Start date is required" }),
-  endDate: z.string().min(1, { error: "End date is required" }),
-  memberId: z.string().min(1, { error: "Member is required" }),
-});
 
 export async function createPledge(formData: FormData) {
   await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
@@ -153,19 +153,24 @@ export async function createPledge(formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.pledge.create({
-    data: {
-      title: data.title,
-      amount: data.amount,
-      amountPaid: 0,
-      startDate: new Date(data.startDate),
-      endDate: new Date(data.endDate),
-      status: "ACTIVE",
-      memberId: data.memberId,
-    },
-  });
+  try {
+    await prisma.pledge.create({
+      data: {
+        title: data.title,
+        amount: data.amount,
+        amountPaid: 0,
+        startDate: new Date(data.startDate),
+        endDate: new Date(data.endDate),
+        status: "ACTIVE",
+        memberId: data.memberId,
+      },
+    });
 
-  revalidatePath("/admin/finance/pledges");
+    revalidatePath("/admin/finance/pledges");
 
-  return { success: true };
+    return { success: true };
+  } catch (err) {
+    console.error("createPledge error:", err);
+    return { success: false, error: "Failed to create pledge. Please try again." };
+  }
 }

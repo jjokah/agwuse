@@ -5,18 +5,27 @@ import { Headphones } from "lucide-react";
 import { PageHero } from "@/components/public/page-hero";
 import { SermonCard } from "@/components/public/sermon-card";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Sermons",
   description: "Listen to and watch sermons from AG Wuse Church.",
 };
 
+async function getSermons() {
+  try {
+    return await prisma.sermon.findMany({
+      orderBy: { date: "desc" },
+      take: 30,
+    });
+  } catch (err) {
+    console.error("Failed to load sermons:", err);
+    return [];
+  }
+}
+
 export default async function SermonsPage() {
-  const sermons = await prisma.sermon.findMany({
-    orderBy: { date: "desc" },
-    take: 30,
-  });
+  const sermons = await getSermons();
 
   return (
     <>

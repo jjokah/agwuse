@@ -6,20 +6,29 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Megaphone } from "lucide-react";
 import { PageHero } from "@/components/public/page-hero";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Announcements",
   description: "Latest announcements from AG Wuse Church.",
 };
 
+async function getAnnouncements() {
+  try {
+    return await prisma.blogPost.findMany({
+      where: { published: true, type: "ANNOUNCEMENT" },
+      orderBy: { publishedAt: "desc" },
+      include: { author: { select: { firstName: true, lastName: true } } },
+      take: 20,
+    });
+  } catch (err) {
+    console.error("Failed to load announcements:", err);
+    return [];
+  }
+}
+
 export default async function AnnouncementsPage() {
-  const announcements = await prisma.blogPost.findMany({
-    where: { published: true, type: "ANNOUNCEMENT" },
-    orderBy: { publishedAt: "desc" },
-    include: { author: { select: { firstName: true, lastName: true } } },
-    take: 20,
-  });
+  const announcements = await getAnnouncements();
 
   return (
     <>

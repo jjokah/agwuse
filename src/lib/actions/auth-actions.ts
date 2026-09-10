@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { signIn } from "@/lib/auth";
 import { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } from "@/lib/validations/auth";
 import { sendVerificationEmail, sendPasswordResetEmail } from "@/lib/email/send-email";
+import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
 import { AuthError } from "next-auth";
 
 export type AuthActionResult = {
@@ -14,6 +15,12 @@ export type AuthActionResult = {
 };
 
 export async function registerUser(formData: FormData): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_register", ip, 5, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
+  }
+
   const raw = {
     firstName: formData.get("firstName") as string,
     lastName: formData.get("lastName") as string,
@@ -31,48 +38,59 @@ export async function registerUser(formData: FormData): Promise<AuthActionResult
 
   const { firstName, lastName, email, phone, password } = parsed.data;
 
-  // Check if user already exists
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return { success: false, error: "An account with this email already exists" };
+  try {
+    // Check if user already exists
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return { success: false, error: "An account with this email already exists" };
+    }
+
+    // Create user
+    const passwordHash = await hash(password, 12);
+    await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        firstName,
+        lastName,
+        name: `${firstName} ${lastName}`,
+        phone: phone || null,
+        role: "MEMBER",
+        status: "PENDING",
+      },
+    });
+
+    // Generate email verification token
+    const token = randomBytes(32).toString("hex");
+    await prisma.token.create({
+      data: {
+        email,
+        token,
+        type: "EMAIL_VERIFICATION",
+        expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+      },
+    });
+
+    // Send verification email
+    const emailResult = await sendVerificationEmail(email, token);
+    if (!emailResult.success) {
+      return { success: false, error: "Failed to send verification email. Please try again." };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("registerUser error:", err);
+    return { success: false, error: "An unexpected error occurred during registration. Please try again." };
   }
-
-  // Create user
-  const passwordHash = await hash(password, 12);
-  await prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-      firstName,
-      lastName,
-      name: `${firstName} ${lastName}`,
-      phone: phone || null,
-      role: "MEMBER",
-      status: "PENDING",
-    },
-  });
-
-  // Generate email verification token
-  const token = randomBytes(32).toString("hex");
-  await prisma.token.create({
-    data: {
-      email,
-      token,
-      type: "EMAIL_VERIFICATION",
-      expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-    },
-  });
-
-  // Send verification email
-  const emailResult = await sendVerificationEmail(email, token);
-  if (!emailResult.success) {
-    return { success: false, error: "Failed to send verification email. Please try again." };
-  }
-
-  return { success: true };
 }
 
 export async function loginUser(formData: FormData): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_login", ip, 5, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
+  }
+
   const raw = {
     email: formData.get("email") as string,
     password: formData.get("password") as string,
@@ -133,6 +151,12 @@ export async function verifyEmail(token: string): Promise<AuthActionResult> {
 }
 
 export async function requestPasswordReset(formData: FormData): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_password_reset_req", ip, 3, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
+  }
+
   const raw = { email: formData.get("email") as string };
 
   const parsed = forgotPasswordSchema.safeParse(raw);
@@ -142,34 +166,45 @@ export async function requestPasswordReset(formData: FormData): Promise<AuthActi
 
   const { email } = parsed.data;
 
-  // Always return success to prevent email enumeration
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
+  try {
+    // Always return success to prevent email enumeration
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return { success: true };
+    }
+
+    // Delete any existing reset tokens for this email
+    await prisma.token.deleteMany({
+      where: { email, type: "PASSWORD_RESET" },
+    });
+
+    // Generate reset token
+    const token = randomBytes(32).toString("hex");
+    await prisma.token.create({
+      data: {
+        email,
+        token,
+        type: "PASSWORD_RESET",
+        expires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+      },
+    });
+
+    await sendPasswordResetEmail(email, token);
+
     return { success: true };
+  } catch (err) {
+    console.error("requestPasswordReset error:", err);
+    return { success: true }; // Don't leak details on reset
   }
-
-  // Delete any existing reset tokens for this email
-  await prisma.token.deleteMany({
-    where: { email, type: "PASSWORD_RESET" },
-  });
-
-  // Generate reset token
-  const token = randomBytes(32).toString("hex");
-  await prisma.token.create({
-    data: {
-      email,
-      token,
-      type: "PASSWORD_RESET",
-      expires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-    },
-  });
-
-  await sendPasswordResetEmail(email, token);
-
-  return { success: true };
 }
 
 export async function resetPassword(formData: FormData): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_password_reset", ip, 5, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
+  }
+
   const raw = {
     token: formData.get("token") as string,
     password: formData.get("password") as string,
@@ -184,26 +219,31 @@ export async function resetPassword(formData: FormData): Promise<AuthActionResul
 
   const { token, password } = parsed.data;
 
-  const tokenRecord = await prisma.token.findUnique({ where: { token } });
+  try {
+    const tokenRecord = await prisma.token.findUnique({ where: { token } });
 
-  if (!tokenRecord || tokenRecord.type !== "PASSWORD_RESET") {
-    return { success: false, error: "Invalid reset token" };
-  }
+    if (!tokenRecord || tokenRecord.type !== "PASSWORD_RESET") {
+      return { success: false, error: "Invalid reset token" };
+    }
 
-  if (tokenRecord.expires < new Date()) {
+    if (tokenRecord.expires < new Date()) {
+      await prisma.token.delete({ where: { token } });
+      return { success: false, error: "Reset token has expired. Please request a new one." };
+    }
+
+    // Update password
+    const passwordHash = await hash(password, 12);
+    await prisma.user.update({
+      where: { email: tokenRecord.email },
+      data: { passwordHash },
+    });
+
+    // Delete used token
     await prisma.token.delete({ where: { token } });
-    return { success: false, error: "Reset token has expired. Please request a new one." };
+
+    return { success: true };
+  } catch (err) {
+    console.error("resetPassword error:", err);
+    return { success: false, error: "Failed to reset password. Please try again." };
   }
-
-  // Update password
-  const passwordHash = await hash(password, 12);
-  await prisma.user.update({
-    where: { email: tokenRecord.email },
-    data: { passwordHash },
-  });
-
-  // Delete used token
-  await prisma.token.delete({ where: { token } });
-
-  return { success: true };
 }

@@ -12,7 +12,7 @@ import { SermonCard } from "@/components/public/sermon-card";
 import { ScriptureQuote } from "@/components/public/scripture-quote";
 import { CTABanner } from "@/components/public/cta-banner";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 const MINISTRY_TILES = [
   {

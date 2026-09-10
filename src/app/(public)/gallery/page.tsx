@@ -6,17 +6,26 @@ import { ImageIcon } from "lucide-react";
 import { PageHero } from "@/components/public/page-hero";
 import { Eyebrow } from "@/components/public/section-heading";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Gallery",
   description: "Photo gallery from AG Wuse Church events and activities.",
 };
 
+async function getGalleryImages() {
+  try {
+    return await prisma.galleryImage.findMany({
+      orderBy: [{ albumName: "asc" }, { sortOrder: "asc" }],
+    });
+  } catch (err) {
+    console.error("Failed to load gallery images:", err);
+    return [];
+  }
+}
+
 export default async function GalleryPage() {
-  const images = await prisma.galleryImage.findMany({
-    orderBy: [{ albumName: "asc" }, { sortOrder: "asc" }],
-  });
+  const images = await getGalleryImages();
 
   // Group by album
   const albums = new Map<string, typeof images>();
