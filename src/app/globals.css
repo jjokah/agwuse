@@ -102,7 +102,9 @@
 
 /* Warm editorial surface for the public site. Applied via body:has() so
    portalled overlays (Sheet, NavigationMenu popup) inherit it too. */
-body:has([data-surface="public"]) {
+body:has([data-surface="public"]),
+html.dark body:has([data-surface="public"]),
+html.dark [data-surface="public"] {
   --background: oklch(0.975 0.012 85);
   --foreground: oklch(0.22 0.02 270);
   --card: oklch(0.99 0.006 90);
@@ -110,6 +112,7 @@ body:has([data-surface="public"]) {
   --popover: oklch(0.99 0.006 90);
   --popover-foreground: oklch(0.22 0.02 270);
   --primary: oklch(0.54 0.12 78);
+  --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.94 0.02 84);
   --secondary-foreground: oklch(0.22 0.02 270);
   --muted: oklch(0.945 0.015 84);
@@ -120,6 +123,7 @@ body:has([data-surface="public"]) {
   --input: oklch(0.89 0.02 84);
   --ring: oklch(0.63 0.14 80);
   --radius: 0.75rem;
+  color-scheme: light;
 }
 
 .dark {

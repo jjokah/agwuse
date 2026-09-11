@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { MediaImage } from "@/components/public/media-image";
+import { BlogPostJsonLd } from "@/components/seo/json-ld";
 
 import { getBlogPostBySlug } from "@/lib/data/content";
 
@@ -37,6 +38,7 @@ export default async function BlogPostPage({
 
   return (
     <div className="px-4 py-16 sm:py-20">
+      <BlogPostJsonLd post={post} />
       <article className="mx-auto max-w-3xl">
         <Link
           href="/blog"

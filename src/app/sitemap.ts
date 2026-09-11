@@ -1,9 +1,9 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/prisma";
+import { SITE_URL } from "@/lib/site";
+import { withBuildFallback } from "@/lib/build-fallback";
 
 export const revalidate = 3600;
-
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://agwuse.magnisale.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes = [
@@ -25,10 +25,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     "/testimony",
     "/privacy-policy",
     "/terms",
-    "/login",
-    "/register",
   ].map((route) => ({
-    url: `${BASE_URL}${route}`,
+    url: `${SITE_URL}${route}`,
     lastModified: new Date(),
     changeFrequency: "weekly" as const,
     priority: route === "" ? 1 : 0.8,
@@ -37,15 +35,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Dynamic blog posts (bounded query)
   let blogRoutes: MetadataRoute.Sitemap = [];
   try {
-    const posts = await prisma.blogPost.findMany({
-      where: { published: true },
-      select: { slug: true, updatedAt: true },
-      orderBy: { publishedAt: "desc" },
-      take: 5000,
-    });
+    const posts = await withBuildFallback(
+      () =>
+        prisma.blogPost.findMany({
+          where: { published: true },
+          select: { slug: true, updatedAt: true },
+          orderBy: { publishedAt: "desc" },
+          take: 5000,
+        }),
+      []
+    );
 
     blogRoutes = posts.map((post) => ({
-      url: `${BASE_URL}/blog/${post.slug}`,
+      url: `${SITE_URL}/blog/${post.slug}`,
       lastModified: post.updatedAt,
       changeFrequency: "monthly" as const,
       priority: 0.6,
@@ -57,15 +59,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Dynamic events (bounded query)
   let eventRoutes: MetadataRoute.Sitemap = [];
   try {
-    const events = await prisma.event.findMany({
-      where: { isPublished: true },
-      select: { id: true, updatedAt: true },
-      orderBy: { startDate: "desc" },
-      take: 1000,
-    });
+    const events = await withBuildFallback(
+      () =>
+        prisma.event.findMany({
+          where: { isPublished: true },
+          select: { id: true, updatedAt: true },
+          orderBy: { startDate: "desc" },
+          take: 1000,
+        }),
+      []
+    );
 
     eventRoutes = events.map((event) => ({
-      url: `${BASE_URL}/events/${event.id}`,
+      url: `${SITE_URL}/events/${event.id}`,
       lastModified: event.updatedAt,
       changeFrequency: "monthly" as const,
       priority: 0.6,

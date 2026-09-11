@@ -5,6 +5,7 @@ import { ArrowLeft, Calendar, MapPin, Clock } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { MediaImage } from "@/components/public/media-image";
 import { sanitizeHtml, stripHtml } from "@/lib/sanitize";
+import { EventJsonLd } from "@/components/seo/json-ld";
 
 import { getEventById } from "@/lib/data/content";
 
@@ -38,6 +39,7 @@ export default async function EventDetailPage({
 
   return (
     <div className="px-4 py-16 sm:py-20">
+      <EventJsonLd event={event} />
       <div className="mx-auto max-w-3xl">
         <Link
           href="/events"
