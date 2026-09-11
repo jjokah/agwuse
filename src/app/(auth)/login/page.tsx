@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoginForm } from "@/components/forms/login-form";
@@ -15,7 +16,9 @@ export default function LoginPage() {
         <CardDescription>Sign in to your member account</CardDescription>
       </CardHeader>
       <CardContent>
-        <LoginForm />
+        <Suspense fallback={<div className="py-6 text-center text-sm text-muted-foreground">Loading...</div>}>
+          <LoginForm />
+        </Suspense>
       </CardContent>
     </Card>
   );

@@ -1,24 +1,28 @@
-"use server";
-
+import "server-only";
 import { Resend } from "resend";
-
-const FROM_EMAIL = "AG Wuse <noreply@updates.magnisale.com>";
 
 function getResendClient() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
+function getFromEmail(): string {
+  return process.env.EMAIL_FROM || "AG Wuse <noreply@updates.magnisale.com>";
+}
+
 export async function sendVerificationEmail(email: string, token: string) {
   const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}`;
 
-  // If no API key configured, log to console in development
   if (!process.env.RESEND_API_KEY) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("RESEND_API_KEY is not configured in production");
+      return { success: false, error: "Email service not configured" };
+    }
     console.log(`[DEV] Verification email for ${email}: ${verifyUrl}`);
     return { success: true };
   }
 
   const { error } = await getResendClient().emails.send({
-    from: FROM_EMAIL,
+    from: getFromEmail(),
     to: email,
     subject: "Verify your email - AG Wuse",
     html: `
@@ -48,12 +52,16 @@ export async function sendPasswordResetEmail(email: string, token: string) {
   const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`;
 
   if (!process.env.RESEND_API_KEY) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("RESEND_API_KEY is not configured in production");
+      return { success: false, error: "Email service not configured" };
+    }
     console.log(`[DEV] Password reset email for ${email}: ${resetUrl}`);
     return { success: true };
   }
 
   const { error } = await getResendClient().emails.send({
-    from: FROM_EMAIL,
+    from: getFromEmail(),
     to: email,
     subject: "Reset your password - AG Wuse",
     html: `

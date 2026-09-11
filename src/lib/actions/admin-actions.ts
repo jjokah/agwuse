@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole, auth } from "@/lib/auth";
 import { type UserRole } from "@/lib/constants";
+import { canChangeRole, canManageUser } from "@/lib/authz/roles";
 import { revalidatePath } from "next/cache";
 
 async function auditLog(
@@ -26,20 +27,30 @@ async function auditLog(
 }
 
 export async function approveUser(userId: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { status: true, email: true },
+      select: { status: true, email: true, role: true },
     });
 
     if (!user) return { success: false, error: "User not found" };
     if (user.status === "ACTIVE") return { success: false, error: "User already active" };
 
+    // Check management permission
+    const check = canManageUser(
+      { id: session.user.id, role: session.user.role },
+      { id: userId, role: user.role },
+    );
+    if (!check.allowed) return { success: false, error: check.reason };
+
     await prisma.user.update({
       where: { id: userId },
-      data: { status: "ACTIVE" },
+      data: {
+        status: "ACTIVE",
+        memberSince: user.status === "PENDING" ? new Date() : undefined,
+      },
     });
 
     await auditLog("APPROVE_USER", "User", userId, {
@@ -56,7 +67,7 @@ export async function approveUser(userId: string) {
 }
 
 export async function deactivateUser(userId: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   try {
     const user = await prisma.user.findUnique({
@@ -65,9 +76,13 @@ export async function deactivateUser(userId: string) {
     });
 
     if (!user) return { success: false, error: "User not found" };
-    if (user.role === "SUPER_ADMIN") {
-      return { success: false, error: "Cannot deactivate a Super Admin" };
-    }
+
+    // Use the authorization rules
+    const check = canManageUser(
+      { id: session.user.id, role: session.user.role },
+      { id: userId, role: user.role },
+    );
+    if (!check.allowed) return { success: false, error: check.reason };
 
     await prisma.user.update({
       where: { id: userId },
@@ -98,17 +113,22 @@ export async function changeUserRole(userId: string, newRole: UserRole) {
 
     if (!user) return { success: false, error: "User not found" };
 
-    // Only SUPER_ADMIN can assign SUPER_ADMIN or ADMIN roles
-    if (
-      (newRole === "SUPER_ADMIN" || newRole === "ADMIN") &&
-      session.user.role !== "SUPER_ADMIN"
-    ) {
-      return { success: false, error: "Only Super Admin can assign this role" };
-    }
+    // Use the authorization rules
+    const check = canChangeRole(
+      { id: session.user.id, role: session.user.role },
+      { id: userId, role: user.role },
+      newRole,
+    );
+    if (!check.allowed) return { success: false, error: check.reason };
 
-    // Prevent removing own SUPER_ADMIN role
-    if (userId === session.user.id && user.role === "SUPER_ADMIN" && newRole !== "SUPER_ADMIN") {
-      return { success: false, error: "Cannot remove your own Super Admin role" };
+    // Prevent demoting the last SUPER_ADMIN
+    if (user.role === "SUPER_ADMIN" && newRole !== "SUPER_ADMIN") {
+      const superAdminCount = await prisma.user.count({
+        where: { role: "SUPER_ADMIN", status: "ACTIVE" },
+      });
+      if (superAdminCount <= 1) {
+        return { success: false, error: "Cannot demote the last Super Admin" };
+      }
     }
 
     await prisma.user.update({

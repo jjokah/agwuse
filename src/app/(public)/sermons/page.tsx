@@ -5,6 +5,8 @@ import { Headphones } from "lucide-react";
 import { PageHero } from "@/components/public/page-hero";
 import { SermonCard } from "@/components/public/sermon-card";
 
+import { withBuildFallback } from "@/lib/build-fallback";
+
 export const revalidate = 60;
 
 export const metadata: Metadata = {
@@ -13,15 +15,14 @@ export const metadata: Metadata = {
 };
 
 async function getSermons() {
-  try {
-    return await prisma.sermon.findMany({
-      orderBy: { date: "desc" },
-      take: 30,
-    });
-  } catch (err) {
-    console.error("Failed to load sermons:", err);
-    return [];
-  }
+  return withBuildFallback(
+    () =>
+      prisma.sermon.findMany({
+        orderBy: { date: "desc" },
+        take: 30,
+      }),
+    [],
+  );
 }
 
 export default async function SermonsPage() {

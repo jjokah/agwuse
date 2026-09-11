@@ -5,6 +5,8 @@ import { FileText } from "lucide-react";
 import { PageHero } from "@/components/public/page-hero";
 import { BlogCard } from "@/components/public/blog-card";
 
+import { withBuildFallback } from "@/lib/build-fallback";
+
 export const revalidate = 60;
 
 export const metadata: Metadata = {
@@ -13,17 +15,16 @@ export const metadata: Metadata = {
 };
 
 async function getBlogPosts() {
-  try {
-    return await prisma.blogPost.findMany({
-      where: { published: true, type: { in: ["BLOG", "NEWS"] } },
-      orderBy: { publishedAt: "desc" },
-      include: { author: { select: { firstName: true, lastName: true } } },
-      take: 20,
-    });
-  } catch (err) {
-    console.error("Failed to load blog posts:", err);
-    return [];
-  }
+  return withBuildFallback(
+    () =>
+      prisma.blogPost.findMany({
+        where: { published: true, type: { in: ["BLOG", "NEWS"] } },
+        orderBy: { publishedAt: "desc" },
+        include: { author: { select: { firstName: true, lastName: true } } },
+        take: 20,
+      }),
+    [],
+  );
 }
 
 export default async function BlogPage() {

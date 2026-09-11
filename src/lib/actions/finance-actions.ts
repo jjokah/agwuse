@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/auth";
 import { transactionSchema, pledgeSchema } from "@/lib/validations/finance";
 import { formatReceiptNumber } from "@/lib/utils";
 import { revalidatePath } from "next/cache";
+import { isUniqueViolation } from "@/lib/prisma-errors";
 
 async function generateReceiptNumber(): Promise<string> {
   const year = new Date().getFullYear();
@@ -121,9 +122,7 @@ export async function createTransaction(formData: FormData) {
 
       return { success: true, receiptNumber };
     } catch (err: unknown) {
-      const isUniqueViolation =
-        err instanceof Error && err.message.includes("Unique constraint");
-      if (isUniqueViolation && retries > 1) {
+      if (isUniqueViolation(err) && retries > 1) {
         retries--;
         continue;
       }

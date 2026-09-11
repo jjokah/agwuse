@@ -5,6 +5,7 @@ import { ArrowLeft, Calendar, MapPin, Clock } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { MediaImage } from "@/components/public/media-image";
+import { sanitizeHtml, stripHtml } from "@/lib/sanitize";
 
 export async function generateMetadata({
   params,
@@ -19,7 +20,7 @@ export async function generateMetadata({
   if (!event) return { title: "Event Not Found" };
   return {
     title: event.title,
-    description: event.description || undefined,
+    description: event.description ? stripHtml(event.description).slice(0, 160) : undefined,
     openGraph: event.imageUrl ? { images: [event.imageUrl] } : undefined,
   };
 }
@@ -92,9 +93,10 @@ export default async function EventDetailPage({
         </div>
 
         {event.description && (
-          <div className="prose prose-lg mt-10 max-w-none">
-            <p>{event.description}</p>
-          </div>
+          <div
+            className="prose prose-lg mt-10 max-w-none text-ink"
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.description) }}
+          />
         )}
       </div>
     </div>

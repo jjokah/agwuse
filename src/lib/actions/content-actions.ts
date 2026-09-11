@@ -11,6 +11,7 @@ import {
 } from "@/lib/validations/content";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { revalidatePath } from "next/cache";
+import { revalidateBlogPost, revalidateEvent, revalidateSermon } from "@/lib/revalidate";
 
 // ============================================================
 // BLOG POSTS
@@ -66,9 +67,7 @@ export async function createBlogPost(formData: FormData) {
       },
     });
 
-    revalidatePath("/admin/content/blog");
-    revalidatePath("/blog");
-    revalidatePath("/announcements");
+    revalidateBlogPost(slug);
     return { success: true };
   } catch (err) {
     console.error("createBlogPost error:", err);
@@ -115,9 +114,7 @@ export async function updateBlogPost(id: string, formData: FormData) {
       },
     });
 
-    revalidatePath("/admin/content/blog");
-    revalidatePath("/blog");
-    revalidatePath("/announcements");
+    revalidateBlogPost(existing.slug);
     return { success: true };
   } catch (err) {
     console.error("updateBlogPost error:", err);
@@ -129,8 +126,7 @@ export async function deleteBlogPost(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
     await prisma.blogPost.delete({ where: { id } });
-    revalidatePath("/admin/content/blog");
-    revalidatePath("/blog");
+    revalidateBlogPost("");
     return { success: true };
   } catch (err) {
     console.error("deleteBlogPost error:", err);
@@ -178,8 +174,7 @@ export async function createEvent(formData: FormData) {
       },
     });
 
-    revalidatePath("/admin/content/events");
-    revalidatePath("/events");
+    revalidateEvent("new");
     return { success: true };
   } catch (err) {
     console.error("createEvent error:", err);
@@ -223,8 +218,7 @@ export async function updateEvent(id: string, formData: FormData) {
       },
     });
 
-    revalidatePath("/admin/content/events");
-    revalidatePath("/events");
+    revalidateEvent(id);
     return { success: true };
   } catch (err) {
     console.error("updateEvent error:", err);
@@ -236,8 +230,7 @@ export async function deleteEvent(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
     await prisma.event.delete({ where: { id } });
-    revalidatePath("/admin/content/events");
-    revalidatePath("/events");
+    revalidateEvent(id);
     return { success: true };
   } catch (err) {
     console.error("deleteEvent error:", err);
@@ -332,8 +325,7 @@ export async function createSermon(formData: FormData) {
       },
     });
 
-    revalidatePath("/admin/content/sermons");
-    revalidatePath("/sermons");
+    revalidateSermon();
     return { success: true };
   } catch (err) {
     console.error("createSermon error:", err);
@@ -375,8 +367,7 @@ export async function updateSermon(id: string, formData: FormData) {
       },
     });
 
-    revalidatePath("/admin/content/sermons");
-    revalidatePath("/sermons");
+    revalidateSermon();
     return { success: true };
   } catch (err) {
     console.error("updateSermon error:", err);
@@ -388,8 +379,7 @@ export async function deleteSermon(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
     await prisma.sermon.delete({ where: { id } });
-    revalidatePath("/admin/content/sermons");
-    revalidatePath("/sermons");
+    revalidateSermon();
     return { success: true };
   } catch (err) {
     console.error("deleteSermon error:", err);

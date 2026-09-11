@@ -6,6 +6,8 @@ import { ImageIcon } from "lucide-react";
 import { PageHero } from "@/components/public/page-hero";
 import { Eyebrow } from "@/components/public/section-heading";
 
+import { withBuildFallback } from "@/lib/build-fallback";
+
 export const revalidate = 300;
 
 export const metadata: Metadata = {
@@ -14,14 +16,13 @@ export const metadata: Metadata = {
 };
 
 async function getGalleryImages() {
-  try {
-    return await prisma.galleryImage.findMany({
-      orderBy: [{ albumName: "asc" }, { sortOrder: "asc" }],
-    });
-  } catch (err) {
-    console.error("Failed to load gallery images:", err);
-    return [];
-  }
+  return withBuildFallback(
+    () =>
+      prisma.galleryImage.findMany({
+        orderBy: [{ albumName: "asc" }, { sortOrder: "asc" }],
+      }),
+    [],
+  );
 }
 
 export default async function GalleryPage() {

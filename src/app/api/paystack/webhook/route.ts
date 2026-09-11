@@ -1,8 +1,32 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import crypto from "crypto";
+import { z } from "zod/v4";
 import { prisma } from "@/lib/prisma";
 import { formatReceiptNumber } from "@/lib/utils";
+import { isUniqueViolation } from "@/lib/prisma-errors";
+
+const WebhookMetadataSchema = z.object({
+  type: z
+    .enum(["TITHE", "OFFERING", "DONATION", "PLEDGE_PAYMENT"])
+    .default("DONATION"),
+  offeringCategory: z
+    .enum([
+      "GENERAL",
+      "SPECIAL",
+      "MISSION",
+      "BUILDING_FUND",
+      "WELFARE",
+      "THANKSGIVING",
+      "HARVEST",
+      "FIRST_FRUIT",
+      "OTHER",
+    ])
+    .optional()
+    .nullable(),
+  memberId: z.string().optional().nullable(),
+  name: z.string().optional().nullable(),
+});
 
 export async function POST(request: Request) {
   const paystackSecretKey = process.env.PAYSTACK_SECRET_KEY;
@@ -43,7 +67,6 @@ export async function POST(request: Request) {
 
   if (event.event === "charge.success") {
     const data = event.data;
-    const metadata = data.metadata || {};
     const amountInNaira = Math.round(data.amount) / 100;
 
     // Check if transaction already recorded (idempotency)
@@ -53,9 +76,6 @@ export async function POST(request: Request) {
     if (existing) {
       return NextResponse.json({ message: "Already processed" });
     }
-
-    // Resolve member if provided
-    const memberId = metadata.memberId || null;
 
     // Find a system user for recordedById (first SUPER_ADMIN)
     const systemUser = await prisma.user.findFirst({
@@ -68,8 +88,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "System error" }, { status: 500 });
     }
 
-    const type = metadata.type || "DONATION";
-    const category = metadata.offeringCategory || "GENERAL";
+    // Validate metadata
+    const metaResult = WebhookMetadataSchema.safeParse(data.metadata || {});
+    const meta = metaResult.success
+      ? metaResult.data
+      : {
+          type: "DONATION" as const,
+          offeringCategory: "GENERAL" as const,
+          memberId: null,
+          name: null,
+        };
+    const type = meta.type;
+    const category = meta.offeringCategory || "GENERAL";
+    const memberId = meta.memberId || null;
 
     // Retry loop to handle receipt number race conditions
     let retries = 3;
@@ -121,9 +152,7 @@ export async function POST(request: Request) {
 
         break; // Success — exit retry loop
       } catch (err: unknown) {
-        const isUniqueViolation =
-          err instanceof Error && err.message.includes("Unique constraint");
-        if (isUniqueViolation && retries > 1) {
+        if (isUniqueViolation(err) && retries > 1) {
           retries--;
           continue;
         }

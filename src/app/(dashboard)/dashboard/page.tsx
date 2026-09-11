@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { StatCard } from "@/components/shared/stat-card";
 import { Calendar, Megaphone, Heart } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { TRANSACTION_TYPE_LABELS } from "@/lib/finance/labels";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -12,34 +14,54 @@ export const metadata: Metadata = {
 
 export default async function DashboardPage() {
   const session = await auth();
-  const userId = session?.user?.id;
+  if (!session?.user?.id) {
+    redirect("/login");
+  }
+  const userId = session.user.id;
 
-  // Fetch user's giving stats
-  const [givingTotal, recentGiving, upcomingEvents, announcements] =
-    await Promise.all([
-      prisma.financialTransaction.aggregate({
-        where: { memberId: userId, type: { not: "EXPENSE" } },
-        _sum: { amount: true },
-      }),
-      prisma.financialTransaction.findMany({
-        where: { memberId: userId, type: { not: "EXPENSE" } },
-        orderBy: { date: "desc" },
-        take: 5,
-      }),
-      prisma.event.findMany({
-        where: {
-          isPublished: true,
-          startDate: { gte: new Date() },
-        },
-        orderBy: { startDate: "asc" },
-        take: 5,
-      }),
-      prisma.blogPost.findMany({
-        where: { published: true, type: "ANNOUNCEMENT" },
-        orderBy: { publishedAt: "desc" },
-        take: 3,
-      }),
-    ]);
+  const now = new Date();
+
+  // Fetch user's giving stats & counts
+  const [
+    givingTotal,
+    recentGiving,
+    upcomingEventsCount,
+    upcomingEvents,
+    announcementsCount,
+    announcements,
+  ] = await Promise.all([
+    prisma.financialTransaction.aggregate({
+      where: { memberId: userId, type: { not: "EXPENSE" } },
+      _sum: { amount: true },
+    }),
+    prisma.financialTransaction.findMany({
+      where: { memberId: userId, type: { not: "EXPENSE" } },
+      orderBy: { date: "desc" },
+      take: 5,
+    }),
+    prisma.event.count({
+      where: {
+        isPublished: true,
+        startDate: { gte: now },
+      },
+    }),
+    prisma.event.findMany({
+      where: {
+        isPublished: true,
+        startDate: { gte: now },
+      },
+      orderBy: { startDate: "asc" },
+      take: 5,
+    }),
+    prisma.blogPost.count({
+      where: { published: true, type: "ANNOUNCEMENT" },
+    }),
+    prisma.blogPost.findMany({
+      where: { published: true, type: "ANNOUNCEMENT" },
+      orderBy: { publishedAt: "desc" },
+      take: 3,
+    }),
+  ]);
 
   const totalGiving = givingTotal._sum.amount
     ? Number(givingTotal._sum.amount)
@@ -65,12 +87,12 @@ export default async function DashboardPage() {
         />
         <StatCard
           title="Upcoming Events"
-          value={upcomingEvents.length}
+          value={upcomingEventsCount}
           icon={<Calendar />}
         />
         <StatCard
           title="Announcements"
-          value={announcements.length}
+          value={announcementsCount}
           icon={<Megaphone />}
         />
       </div>
@@ -99,7 +121,9 @@ export default async function DashboardPage() {
                   className="flex items-center justify-between text-sm"
                 >
                   <div>
-                    <p className="font-medium">{tx.type}</p>
+                    <p className="font-medium">
+                      {TRANSACTION_TYPE_LABELS[tx.type] || tx.type}
+                    </p>
                     <p className="text-xs text-muted-foreground">
                       {formatDate(tx.date)}
                     </p>

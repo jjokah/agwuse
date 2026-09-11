@@ -13,9 +13,9 @@ export const metadata: Metadata = {
 const DEFAULT_KEYS = [
   { key: "church_name", label: "Church Name", defaultValue: "Assemblies of God Church, Wuse Zone 5" },
   { key: "church_address", label: "Address", defaultValue: "53, Accra Street, Wuse Zone 5, Abuja, Nigeria" },
-  { key: "church_phone", label: "Phone", defaultValue: "0803 591 0333" },
+  { key: "church_phones", label: "Phone", defaultValue: "0803 591 0333" },
   { key: "church_email", label: "Email", defaultValue: "info@agwuse.org" },
-  { key: "service_time", label: "Main Service Time", defaultValue: "Sundays 8:00 AM" },
+  { key: "service_times", label: "Main Service Time", defaultValue: "Sundays 8:00 AM" },
 ];
 
 export default async function AdminSettingsPage() {

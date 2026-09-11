@@ -32,20 +32,23 @@ const MINISTRY_TILES = [
   },
 ];
 
+import { withBuildFallback } from "@/lib/build-fallback";
+
 async function getHomeContent() {
-  try {
-    const [events, sermon] = await Promise.all([
-      prisma.event.findMany({
-        where: { isPublished: true, startDate: { gte: new Date() } },
-        orderBy: { startDate: "asc" },
-        take: 3,
-      }),
-      prisma.sermon.findFirst({ orderBy: { date: "desc" } }),
-    ]);
-    return { events, sermon };
-  } catch {
-    return { events: [] as Event[], sermon: null as Sermon | null };
-  }
+  return withBuildFallback(
+    async () => {
+      const [events, sermon] = await Promise.all([
+        prisma.event.findMany({
+          where: { isPublished: true, startDate: { gte: new Date() } },
+          orderBy: { startDate: "asc" },
+          take: 3,
+        }),
+        prisma.sermon.findFirst({ orderBy: { date: "desc" } }),
+      ]);
+      return { events, sermon };
+    },
+    { events: [], sermon: null },
+  );
 }
 
 export default async function HomePage() {

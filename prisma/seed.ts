@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 import { hash } from "bcryptjs";
+import { randomBytes } from "crypto";
 
 const connectionString =
   process.env.DATABASE_URL ??
@@ -188,13 +189,25 @@ async function main() {
   // ============================================================
   // 3. SUPER ADMIN USER
   // ============================================================
-  const adminEmail = "admin@agwuse.org";
+  const adminEmail = process.env.SEED_ADMIN_EMAIL || "admin@agwuse.org";
+  let adminPassword = process.env.SEED_ADMIN_PASSWORD;
+
+  if (!adminPassword) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "SEED_ADMIN_PASSWORD is required in production. Set SEED_ADMIN_EMAIL and SEED_ADMIN_PASSWORD."
+      );
+    }
+    adminPassword = randomBytes(16).toString("base64url");
+    console.log(`  ⚠ No SEED_ADMIN_PASSWORD set — generated: ${adminPassword}`);
+  }
+
   const existingAdmin = await prisma.user.findUnique({
     where: { email: adminEmail },
   });
 
   if (!existingAdmin) {
-    const passwordHash = await hash("Admin@2026!", 12);
+    const passwordHash = await hash(adminPassword, 12);
     await prisma.user.create({
       data: {
         email: adminEmail,
@@ -207,7 +220,7 @@ async function main() {
         emailVerified: new Date(),
       },
     });
-    console.log("  ✓ Super admin user created (admin@agwuse.org / Admin@2026!)");
+    console.log(`  ✓ Super admin user created (${adminEmail})`);
   } else {
     console.log("  ✓ Super admin user already exists");
   }
@@ -263,7 +276,7 @@ async function main() {
   for (const setting of churchSettings) {
     await prisma.churchSettings.upsert({
       where: { key: setting.key },
-      update: { value: setting.value },
+      update: {},  // Don't overwrite admin edits on re-seed
       create: {
         key: setting.key,
         value: setting.value,

@@ -6,6 +6,8 @@ import { PageHero } from "@/components/public/page-hero";
 import { ScriptureQuote } from "@/components/public/scripture-quote";
 import { SectionHeading } from "@/components/public/section-heading";
 
+import { withBuildFallback } from "@/lib/build-fallback";
+
 export const revalidate = 60;
 
 export const metadata: Metadata = {
@@ -14,16 +16,15 @@ export const metadata: Metadata = {
 };
 
 async function getTestimonies() {
-  try {
-    return await prisma.submission.findMany({
-      where: { type: "TESTIMONY", status: "APPROVED", isPublic: true },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-    });
-  } catch (err) {
-    console.error("Failed to load testimonies:", err);
-    return [];
-  }
+  return withBuildFallback(
+    () =>
+      prisma.submission.findMany({
+        where: { type: "TESTIMONY", status: "APPROVED", isPublic: true },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+    [],
+  );
 }
 
 export default async function TestimonyPage() {

@@ -39,10 +39,11 @@ export async function registerUser(formData: FormData): Promise<AuthActionResult
   const { firstName, lastName, email, phone, password } = parsed.data;
 
   try {
-    // Check if user already exists
+    // Check if user already exists — return the same message either way
+    // to prevent email enumeration.
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      return { success: false, error: "An account with this email already exists" };
+      return { success: true };
     }
 
     // Create user
@@ -115,7 +116,7 @@ export async function loginUser(formData: FormData): Promise<AuthActionResult> {
         return { success: false, error: "Please verify your email before logging in. Check your inbox." };
       }
       if (error.cause?.err?.message === "ACCOUNT_NOT_ACTIVE") {
-        return { success: false, error: "Your account is not active. Please contact the church admin." };
+        return { success: false, error: "Your account is awaiting approval by a church administrator." };
       }
       return { success: false, error: "Invalid email or password" };
     }
@@ -124,6 +125,12 @@ export async function loginUser(formData: FormData): Promise<AuthActionResult> {
 }
 
 export async function verifyEmail(token: string): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_verify", ip, 10, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
+  }
+
   const tokenRecord = await prisma.token.findUnique({ where: { token } });
 
   if (!tokenRecord || tokenRecord.type !== "EMAIL_VERIFICATION") {
@@ -135,12 +142,11 @@ export async function verifyEmail(token: string): Promise<AuthActionResult> {
     return { success: false, error: "Verification token has expired. Please register again." };
   }
 
-  // Activate the user
+  // Set emailVerified only — status stays PENDING until admin approves
   await prisma.user.update({
     where: { email: tokenRecord.email },
     data: {
       emailVerified: new Date(),
-      status: "ACTIVE",
     },
   });
 

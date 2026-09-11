@@ -6,6 +6,8 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Megaphone } from "lucide-react";
 import { PageHero } from "@/components/public/page-hero";
 
+import { withBuildFallback } from "@/lib/build-fallback";
+
 export const revalidate = 60;
 
 export const metadata: Metadata = {
@@ -14,17 +16,16 @@ export const metadata: Metadata = {
 };
 
 async function getAnnouncements() {
-  try {
-    return await prisma.blogPost.findMany({
-      where: { published: true, type: "ANNOUNCEMENT" },
-      orderBy: { publishedAt: "desc" },
-      include: { author: { select: { firstName: true, lastName: true } } },
-      take: 20,
-    });
-  } catch (err) {
-    console.error("Failed to load announcements:", err);
-    return [];
-  }
+  return withBuildFallback(
+    () =>
+      prisma.blogPost.findMany({
+        where: { published: true, type: "ANNOUNCEMENT" },
+        orderBy: { publishedAt: "desc" },
+        include: { author: { select: { firstName: true, lastName: true } } },
+        take: 20,
+      }),
+    [],
+  );
 }
 
 export default async function AnnouncementsPage() {

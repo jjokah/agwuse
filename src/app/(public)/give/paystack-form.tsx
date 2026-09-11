@@ -14,6 +14,13 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 
+import {
+  PUBLIC_GIVING_TYPES,
+  PUBLIC_OFFERING_CATEGORIES,
+  TRANSACTION_TYPE_LABELS,
+  OFFERING_CATEGORY_LABELS,
+} from "@/lib/finance/labels";
+
 declare global {
   interface Window {
     PaystackPop: {
@@ -22,21 +29,15 @@ declare global {
   }
 }
 
-const TYPES = [
-  { value: "TITHE", label: "Tithe" },
-  { value: "OFFERING", label: "Offering" },
-  { value: "DONATION", label: "Donation" },
-];
+const TYPES = PUBLIC_GIVING_TYPES.map((value) => ({
+  value,
+  label: TRANSACTION_TYPE_LABELS[value] || value,
+}));
 
-const CATEGORIES = [
-  { value: "GENERAL", label: "General" },
-  { value: "SPECIAL", label: "Special" },
-  { value: "MISSION", label: "Mission" },
-  { value: "BUILDING_FUND", label: "Building Fund" },
-  { value: "WELFARE", label: "Welfare" },
-  { value: "THANKSGIVING", label: "Thanksgiving" },
-  { value: "HARVEST", label: "Harvest" },
-];
+const CATEGORIES = PUBLIC_OFFERING_CATEGORIES.map((value) => ({
+  value,
+  label: OFFERING_CATEGORY_LABELS[value] || value,
+}));
 
 export function PaystackForm() {
   const [loading, setLoading] = useState(false);
@@ -71,10 +72,16 @@ export function PaystackForm() {
         }),
       });
 
-      const data = await res.json();
+      const isJson = res.headers.get("content-type")?.includes("application/json");
+      const data = isJson ? await res.json() : null;
 
       if (!res.ok) {
-        toast.error(data.error || "Failed to initialize payment");
+        toast.error(data?.error || `Failed to initialize payment (${res.status})`);
+        return;
+      }
+
+      if (!data?.authorization_url && !data?.reference) {
+        toast.error("Invalid response from payment server");
         return;
       }
 

@@ -18,14 +18,24 @@ export function ChurchSettingsForm({ settings }: ChurchSettingsFormProps) {
     e.preventDefault();
     setLoading(true);
     const form = new FormData(e.currentTarget);
+    const errors: string[] = [];
+
     try {
       for (const setting of settings) {
         const value = form.get(setting.key) as string;
         if (value !== setting.value) {
-          await updateChurchSetting(setting.key, value);
+          const result = await updateChurchSetting(setting.key, value);
+          if (!result.success) {
+            errors.push(`${setting.label}: ${result.error}`);
+          }
         }
       }
-      toast.success("Settings saved");
+
+      if (errors.length > 0) {
+        toast.error(`Some settings failed to save: ${errors.join("; ")}`);
+      } else {
+        toast.success("Settings saved");
+      }
     } catch {
       toast.error("Failed to save settings");
     } finally {

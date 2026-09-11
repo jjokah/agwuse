@@ -18,19 +18,20 @@ const CATEGORY_LABELS: Record<string, string> = {
   OUTREACH: "Media & Outreach",
 };
 
+import { withBuildFallback } from "@/lib/build-fallback";
+
 const CATEGORY_ORDER = ["MINISTRY", "CHOIR", "COMMITTEE", "OUTREACH"];
 
 async function getDepartmentsData() {
-  try {
-    return await prisma.department.findMany({
-      where: { isActive: true },
-      include: { leader: { select: { firstName: true, lastName: true } } },
-      orderBy: { name: "asc" },
-    });
-  } catch (err) {
-    console.error("Failed to load departments:", err);
-    return [];
-  }
+  return withBuildFallback(
+    () =>
+      prisma.department.findMany({
+        where: { isActive: true },
+        include: { leader: { select: { firstName: true, lastName: true } } },
+        orderBy: { name: "asc" },
+      }),
+    [],
+  );
 }
 
 export default async function DepartmentsPage() {
