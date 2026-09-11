@@ -1,31 +1,22 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import crypto from "crypto";
 import { z } from "zod/v4";
-import { prisma } from "@/lib/prisma";
-import { formatReceiptNumber } from "@/lib/utils";
-import { isUniqueViolation } from "@/lib/prisma-errors";
+import { verifyPaystackSignature } from "@/lib/finance/paystack-signature";
+import { recordPaystackPayment } from "@/lib/finance/paystack";
 
-const WebhookMetadataSchema = z.object({
-  type: z
-    .enum(["TITHE", "OFFERING", "DONATION", "PLEDGE_PAYMENT"])
-    .default("DONATION"),
-  offeringCategory: z
-    .enum([
-      "GENERAL",
-      "SPECIAL",
-      "MISSION",
-      "BUILDING_FUND",
-      "WELFARE",
-      "THANKSGIVING",
-      "HARVEST",
-      "FIRST_FRUIT",
-      "OTHER",
-    ])
-    .optional()
-    .nullable(),
-  memberId: z.string().optional().nullable(),
-  name: z.string().optional().nullable(),
+const chargePayloadSchema = z.object({
+  event: z.string(),
+  data: z.object({
+    reference: z.string(),
+    amount: z.number(),
+    currency: z.string().default("NGN"),
+    paid_at: z.string().optional(),
+    customer: z
+      .object({
+        email: z.string().optional(),
+      })
+      .optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  }),
 });
 
 export async function POST(request: Request) {
@@ -34,136 +25,55 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not configured" }, { status: 503 });
   }
 
-  // Verify Paystack signature
-  const headersList = await headers();
-  const signature = headersList.get("x-paystack-signature");
-  const body = await request.text();
+  // 1. Verify signature directly from request.headers for testability
+  const signature = request.headers.get("x-paystack-signature");
+  const rawBody = await request.text();
 
-  const hash = crypto
-    .createHmac("sha512", paystackSecretKey)
-    .update(body)
-    .digest("hex");
-
-  if (!signature) {
-    return NextResponse.json({ error: "Missing signature" }, { status: 401 });
-  }
-
-  const hashBuffer = Buffer.from(hash, "utf-8");
-  const signatureBuffer = Buffer.from(signature, "utf-8");
-
-  if (
-    hashBuffer.length !== signatureBuffer.length ||
-    !crypto.timingSafeEqual(hashBuffer, signatureBuffer)
-  ) {
+  if (!verifyPaystackSignature(rawBody, signature, paystackSecretKey)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
-  let event;
+  // 2. Parse and validate JSON
+  let bodyJson: unknown;
   try {
-    event = JSON.parse(body);
+    bodyJson = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const parsed = chargePayloadSchema.safeParse(bodyJson);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid payload shape" }, { status: 400 });
+  }
+
+  const event = parsed.data;
+
+  // Process successful charge events
   if (event.event === "charge.success") {
     const data = event.data;
     const amountInNaira = Math.round(data.amount) / 100;
 
-    // Check if transaction already recorded (idempotency)
-    const existing = await prisma.financialTransaction.findFirst({
-      where: { paystackRef: data.reference },
-    });
-    if (existing) {
-      return NextResponse.json({ message: "Already processed" });
-    }
+    try {
+      const recordResult = await recordPaystackPayment({
+        reference: data.reference,
+        amount: amountInNaira,
+        currency: data.currency,
+        paid_at: data.paid_at,
+        customer: data.customer,
+        metadata: data.metadata,
+      });
 
-    // Find a system user for recordedById (first SUPER_ADMIN)
-    const systemUser = await prisma.user.findFirst({
-      where: { role: "SUPER_ADMIN" },
-      select: { id: true },
-    });
-
-    if (!systemUser) {
-      console.error("No system user found for Paystack webhook recording");
-      return NextResponse.json({ error: "System error" }, { status: 500 });
-    }
-
-    // Validate metadata
-    const metaResult = WebhookMetadataSchema.safeParse(data.metadata || {});
-    const meta = metaResult.success
-      ? metaResult.data
-      : {
-          type: "DONATION" as const,
-          offeringCategory: "GENERAL" as const,
-          memberId: null,
-          name: null,
-        };
-    const type = meta.type;
-    const category = meta.offeringCategory || "GENERAL";
-    const memberId = meta.memberId || null;
-
-    // Retry loop to handle receipt number race conditions
-    let retries = 3;
-    while (retries > 0) {
-      try {
-        // Generate receipt number inside retry loop
-        const year = new Date().getFullYear();
-        const prefix = `AG-${year}-`;
-        const lastTx = await prisma.financialTransaction.findFirst({
-          where: { receiptNumber: { startsWith: prefix } },
-          orderBy: { receiptNumber: "desc" },
-          select: { receiptNumber: true },
-        });
-        const match = lastTx?.receiptNumber?.match(/-(\d{5})$/);
-        const lastSeq = match ? parseInt(match[1], 10) : 0;
-        const receiptNumber = formatReceiptNumber(year, lastSeq + 1);
-
-        await prisma.financialTransaction.create({
-          data: {
-            type,
-            category,
-            amount: amountInNaira,
-            currency: "NGN",
-            paymentMethod: "ONLINE",
-            date: new Date(data.paid_at || new Date()),
-            receiptNumber,
-            paystackRef: data.reference,
-            memberId,
-            recordedById: systemUser.id,
-            notes: `Online payment via Paystack. Email: ${data.customer?.email || "N/A"}`,
-          },
-        });
-
-        // Audit log
-        await prisma.auditLog.create({
-          data: {
-            action: "PAYSTACK_PAYMENT",
-            entity: "FinancialTransaction",
-            entityId: data.reference,
-            details: JSON.stringify({
-              amount: amountInNaira,
-              type,
-              email: data.customer?.email,
-              reference: data.reference,
-            }),
-            userId: systemUser.id,
-          },
-        });
-
-        break; // Success — exit retry loop
-      } catch (err: unknown) {
-        if (isUniqueViolation(err) && retries > 1) {
-          retries--;
-          continue;
-        }
-        console.error("Webhook transaction creation failed:", err);
-        return NextResponse.json(
-          { error: "Processing failed" },
-          { status: 500 }
-        );
+      if (recordResult.status === "mismatch" || recordResult.status === "ignored") {
+        return NextResponse.json({ message: recordResult.message });
       }
+
+      return NextResponse.json({ message: "OK", receiptNumber: recordResult.receiptNumber });
+    } catch (err: unknown) {
+      console.error("Paystack webhook error:", err);
+      // Only transient failures return 500
+      return NextResponse.json({ error: "Processing failed" }, { status: 500 });
     }
   }
 
-  return NextResponse.json({ message: "OK" });
+  return NextResponse.json({ message: "Event ignored" });
 }

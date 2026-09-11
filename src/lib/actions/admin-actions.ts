@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, auth } from "@/lib/auth";
 import { type UserRole } from "@/lib/constants";
 import { canChangeRole, canManageUser } from "@/lib/authz/roles";
+import { revokeSessions } from "@/lib/authz/revoke";
 import { revalidatePath } from "next/cache";
 
 async function auditLog(
@@ -84,9 +85,12 @@ export async function deactivateUser(userId: string) {
     );
     if (!check.allowed) return { success: false, error: check.reason };
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { status: "INACTIVE" },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { status: "INACTIVE" },
+      });
+      await revokeSessions(tx, userId);
     });
 
     await auditLog("DEACTIVATE_USER", "User", userId, {

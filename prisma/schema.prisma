@@ -106,6 +106,12 @@ enum DepartmentCategory {
   OUTREACH
 }
 
+enum PaymentIntentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
 // ============================================================
 // AUTH MODELS (Auth.js Prisma Adapter)
 // ============================================================
@@ -153,12 +159,12 @@ model VerificationToken {
 model Token {
   id        String   @id @default(cuid())
   email     String
-  token     String   @unique
+  tokenHash String   @unique
   type      String   // EMAIL_VERIFICATION | PASSWORD_RESET
   expires   DateTime
   createdAt DateTime @default(now())
 
-  @@unique([email, token])
+  @@index([email, type])
   @@map("tokens")
 }
 
@@ -182,6 +188,7 @@ model User {
   memberSince   DateTime?
   role          UserRole      @default(VISITOR)
   status        UserStatus    @default(PENDING)
+  tokenVersion  Int           @default(0)
   profilePhoto  String?
   image         String?
   name          String?
@@ -195,6 +202,7 @@ model User {
   transactions         FinancialTransaction[] @relation("TransactionMember")
   recordedTransactions FinancialTransaction[] @relation("TransactionRecordedBy")
   pledges              Pledge[]
+  paymentIntents       PaymentIntent[]
   blogPosts            BlogPost[]
   events               Event[]
   submissions          Submission[]
@@ -245,15 +253,16 @@ model FinancialTransaction {
   date            DateTime
   notes           String?          @db.Text
   receiptNumber   String?          @unique
-  paystackRef     String?
+  paystackRef     String?          @unique
 
   memberId     String?
   member       User?   @relation("TransactionMember", fields: [memberId], references: [id], onDelete: SetNull)
   recordedById String
   recordedBy   User    @relation("TransactionRecordedBy", fields: [recordedById], references: [id])
 
-  pledgeId String?
-  pledge   Pledge? @relation(fields: [pledgeId], references: [id])
+  pledgeId      String?
+  pledge        Pledge?        @relation(fields: [pledgeId], references: [id])
+  paymentIntent PaymentIntent?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -264,8 +273,36 @@ model FinancialTransaction {
   @@index([category])
   @@index([recordedById])
   @@index([date, type])
-  @@index([paystackRef])
   @@map("financial_transactions")
+}
+
+model ReceiptCounter {
+  year      Int      @id
+  lastValue Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("receipt_counters")
+}
+
+model PaymentIntent {
+  reference     String              @id
+  memberId      String?
+  email         String
+  amount        Decimal             @db.Decimal(12, 2)
+  currency      String              @default("NGN")
+  type          TransactionType
+  category      OfferingCategory?
+  status        PaymentIntentStatus @default(PENDING)
+  transactionId String?             @unique
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  member      User?                 @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  transaction FinancialTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([memberId])
+  @@map("payment_intents")
 }
 
 model Pledge {

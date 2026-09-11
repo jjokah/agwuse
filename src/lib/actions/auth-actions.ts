@@ -1,12 +1,13 @@
 "use server";
 
 import { hash } from "bcryptjs";
-import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { signIn } from "@/lib/auth";
 import { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } from "@/lib/validations/auth";
 import { sendVerificationEmail, sendPasswordResetEmail } from "@/lib/email/send-email";
 import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
+import { revokeSessions } from "@/lib/authz/revoke";
+import { createToken, consumeToken, normalizeEmail } from "@/lib/tokens";
 import { AuthError } from "next-auth";
 
 export type AuthActionResult = {
@@ -61,15 +62,10 @@ export async function registerUser(formData: FormData): Promise<AuthActionResult
       },
     });
 
-    // Generate email verification token
-    const token = randomBytes(32).toString("hex");
-    await prisma.token.create({
-      data: {
-        email,
-        token,
-        type: "EMAIL_VERIFICATION",
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-      },
+    // Generate hashed email verification token
+    const token = await createToken({
+      email: normalizeEmail(email),
+      type: "EMAIL_VERIFICATION",
     });
 
     // Send verification email
@@ -131,27 +127,18 @@ export async function verifyEmail(token: string): Promise<AuthActionResult> {
     return { success: false, error: limitCheck.error };
   }
 
-  const tokenRecord = await prisma.token.findUnique({ where: { token } });
-
-  if (!tokenRecord || tokenRecord.type !== "EMAIL_VERIFICATION") {
-    return { success: false, error: "Invalid verification token" };
-  }
-
-  if (tokenRecord.expires < new Date()) {
-    await prisma.token.delete({ where: { token } });
-    return { success: false, error: "Verification token has expired. Please register again." };
+  const consumed = await consumeToken(token, "EMAIL_VERIFICATION");
+  if (!consumed) {
+    return { success: false, error: "Invalid or expired verification token" };
   }
 
   // Set emailVerified only — status stays PENDING until admin approves
   await prisma.user.update({
-    where: { email: tokenRecord.email },
+    where: { email: consumed.email },
     data: {
       emailVerified: new Date(),
     },
   });
-
-  // Delete used token
-  await prisma.token.delete({ where: { token } });
 
   return { success: true };
 }
@@ -170,32 +157,21 @@ export async function requestPasswordReset(formData: FormData): Promise<AuthActi
     return { success: false, error: "Please enter a valid email address" };
   }
 
-  const { email } = parsed.data;
+  const normalized = normalizeEmail(parsed.data.email);
 
   try {
     // Always return success to prevent email enumeration
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email: normalized } });
     if (!user) {
       return { success: true };
     }
 
-    // Delete any existing reset tokens for this email
-    await prisma.token.deleteMany({
-      where: { email, type: "PASSWORD_RESET" },
+    const token = await createToken({
+      email: normalized,
+      type: "PASSWORD_RESET",
     });
 
-    // Generate reset token
-    const token = randomBytes(32).toString("hex");
-    await prisma.token.create({
-      data: {
-        email,
-        token,
-        type: "PASSWORD_RESET",
-        expires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-      },
-    });
-
-    await sendPasswordResetEmail(email, token);
+    await sendPasswordResetEmail(normalized, token);
 
     return { success: true };
   } catch (err) {
@@ -226,26 +202,20 @@ export async function resetPassword(formData: FormData): Promise<AuthActionResul
   const { token, password } = parsed.data;
 
   try {
-    const tokenRecord = await prisma.token.findUnique({ where: { token } });
-
-    if (!tokenRecord || tokenRecord.type !== "PASSWORD_RESET") {
-      return { success: false, error: "Invalid reset token" };
+    const consumed = await consumeToken(token, "PASSWORD_RESET");
+    if (!consumed) {
+      return { success: false, error: "Invalid or expired reset token. Please request a new one." };
     }
 
-    if (tokenRecord.expires < new Date()) {
-      await prisma.token.delete({ where: { token } });
-      return { success: false, error: "Reset token has expired. Please request a new one." };
-    }
-
-    // Update password
+    // Update password and revoke existing sessions in transaction
     const passwordHash = await hash(password, 12);
-    await prisma.user.update({
-      where: { email: tokenRecord.email },
-      data: { passwordHash },
+    await prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { email: consumed.email },
+        data: { passwordHash },
+      });
+      await revokeSessions(tx, updatedUser.id);
     });
-
-    // Delete used token
-    await prisma.token.delete({ where: { token } });
 
     return { success: true };
   } catch (err) {

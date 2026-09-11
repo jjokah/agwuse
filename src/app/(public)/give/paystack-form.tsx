@@ -23,8 +23,17 @@ import {
 
 declare global {
   interface Window {
-    PaystackPop: {
-      setup: (options: Record<string, unknown>) => { openIframe: () => void };
+    PaystackPop?: {
+      new (): {
+        resumeTransaction: (
+          accessCode: string,
+          options?: {
+            onSuccess?: (transaction: { reference: string }) => void;
+            onCancel?: () => void;
+          },
+        ) => void;
+      };
+      setup?: (options: Record<string, unknown>) => { openIframe: () => void };
     };
   }
 }
@@ -42,6 +51,7 @@ const CATEGORIES = PUBLIC_OFFERING_CATEGORIES.map((value) => ({
 export function PaystackForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [receiptNumber, setReceiptNumber] = useState<string | null>(null);
   const [type, setType] = useState("TITHE");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -77,42 +87,57 @@ export function PaystackForm() {
 
       if (!res.ok) {
         toast.error(data?.error || `Failed to initialize payment (${res.status})`);
+        setLoading(false);
         return;
       }
 
       if (!data?.authorization_url && !data?.reference) {
         toast.error("Invalid response from payment server");
+        setLoading(false);
         return;
       }
 
-      // Use Paystack Inline JS
-      const paystackKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-      if (!paystackKey || !window.PaystackPop) {
-        // Fallback: redirect to authorization URL
-        window.location.href = data.authorization_url;
-        return;
+      // Try Paystack Inline v2
+      if (typeof window !== "undefined" && window.PaystackPop && data.access_code) {
+        try {
+          const popup = new window.PaystackPop();
+          popup.resumeTransaction(data.access_code, {
+            onSuccess: async (tx: { reference: string }) => {
+              try {
+                const vRes = await fetch("/api/paystack/verify", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ reference: tx.reference }),
+                });
+                const vData = await vRes.json();
+                if (vRes.ok && vData.success) {
+                  setReceiptNumber(vData.receiptNumber || null);
+                  setSuccess(true);
+                  toast.success("Payment successful! Thank you for your gift.");
+                } else {
+                  toast.error(vData.error || "Payment verification failed");
+                }
+              } catch {
+                toast.error("Could not verify payment. If debited, please contact church office.");
+              } finally {
+                setLoading(false);
+              }
+            },
+            onCancel: () => {
+              toast.info("Payment window closed");
+              setLoading(false);
+            },
+          });
+          return;
+        } catch (popupErr) {
+          console.warn("Paystack Inline v2 resume failed, falling back to redirect:", popupErr);
+        }
       }
 
-      const handler = window.PaystackPop.setup({
-        key: paystackKey,
-        email,
-        amount: Math.round(amount * 100),
-        ref: data.reference,
-        onClose: () => {
-          toast.info("Payment window closed");
-          setLoading(false);
-        },
-        callback: () => {
-          setSuccess(true);
-          setLoading(false);
-          toast.success("Payment successful! Thank you for your gift.");
-        },
-      });
-
-      handler.openIframe();
+      // Fallback: redirect to authorization URL
+      window.location.href = data.authorization_url;
     } catch {
       toast.error("An error occurred. Please try again.");
-    } finally {
       setLoading(false);
     }
   }
@@ -127,15 +152,20 @@ export function PaystackForm() {
         </div>
         <h3 className="mb-2 text-xl font-semibold">Thank You!</h3>
         <p className="text-muted-foreground">
-          Your gift has been received. God bless you!
+          Your gift has been received and confirmed. God bless you!
         </p>
+        {receiptNumber && (
+          <p className="mt-3 text-sm font-medium text-brand-navy">
+            Receipt: <span className="font-mono">{receiptNumber}</span>
+          </p>
+        )}
       </div>
     );
   }
 
   return (
     <>
-      <Script src="https://js.paystack.co/v1/inline.js" strategy="lazyOnload" />
+      <Script src="https://js.paystack.co/v2/inline.js" strategy="lazyOnload" />
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">

@@ -1,24 +1,11 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { OfferingCategory } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { transactionSchema, pledgeSchema } from "@/lib/validations/finance";
-import { formatReceiptNumber } from "@/lib/utils";
+import { recordTransaction } from "@/lib/finance/record-transaction";
 import { revalidatePath } from "next/cache";
-import { isUniqueViolation } from "@/lib/prisma-errors";
-
-async function generateReceiptNumber(): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `AG-${year}-`;
-  const lastTx = await prisma.financialTransaction.findFirst({
-    where: { receiptNumber: { startsWith: prefix } },
-    orderBy: { receiptNumber: "desc" },
-    select: { receiptNumber: true },
-  });
-  const match = lastTx?.receiptNumber?.match(/-(\d{5})$/);
-  const lastSeq = match ? parseInt(match[1], 10) : 0;
-  return formatReceiptNumber(year, lastSeq + 1);
-}
 
 export async function createTransaction(formData: FormData) {
   const session = await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
@@ -28,110 +15,58 @@ export async function createTransaction(formData: FormData) {
     amount: formData.get("amount") as string,
     paymentMethod: formData.get("paymentMethod") as string,
     date: formData.get("date") as string,
-    memberId: (formData.get("memberId") as string) || undefined,
-    offeringCategory: (formData.get("offeringCategory") as string) || undefined,
-    categoryId: (formData.get("categoryId") as string) || undefined,
-    referenceNumber: (formData.get("referenceNumber") as string) || undefined,
-    notes: (formData.get("notes") as string) || undefined,
-    pledgeId: (formData.get("pledgeId") as string) || undefined,
+    memberId: formData.get("memberId") as string,
+    offeringCategory: formData.get("offeringCategory") as string,
+    categoryId: formData.get("categoryId") as string,
+    referenceNumber: formData.get("referenceNumber") as string,
+    notes: formData.get("notes") as string,
+    pledgeId: formData.get("pledgeId") as string,
   };
 
   const parsed = transactionSchema.safeParse(raw);
   if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0].message };
+    return { success: false, error: parsed.error.issues[0]?.message || "Invalid input" };
   }
 
   const data = parsed.data;
 
-  // Resolve expense category name if categoryId is provided
-  let expenseCategoryName: string | null = null;
-  if (data.type === "EXPENSE" && data.categoryId) {
-    try {
+  try {
+    let expenseCategoryName: string | null = null;
+    if (data.type === "EXPENSE" && data.categoryId) {
       const expCat = await prisma.financialCategory.findUnique({
         where: { id: data.categoryId },
         select: { name: true },
       });
-      expenseCategoryName = expCat?.name ?? null;
-    } catch {
-      expenseCategoryName = null;
+      expenseCategoryName = expCat?.name || null;
     }
-  }
 
-  let retries = 3;
-  while (retries > 0) {
-    try {
-      const receiptNumber = await generateReceiptNumber();
-
-      const transaction = await prisma.$transaction(async (tx) => {
-    const txn = await tx.financialTransaction.create({
-      data: {
+    const transaction = await prisma.$transaction(async (tx) => {
+      return recordTransaction(tx, {
         type: data.type,
         amount: data.amount,
         currency: "NGN",
         paymentMethod: data.paymentMethod,
-        date: new Date(data.date),
+        date: data.date,
         memberId: data.memberId || null,
-        category: (data.offeringCategory || "GENERAL") as "GENERAL" | "SPECIAL" | "MISSION" | "BUILDING_FUND" | "WELFARE" | "THANKSGIVING" | "HARVEST" | "FIRST_FRUIT" | "OTHER",
+        category: (data.offeringCategory || "GENERAL") as OfferingCategory,
         customCategory: data.type === "EXPENSE" ? expenseCategoryName : null,
         referenceNumber: data.referenceNumber || null,
         notes: data.notes || null,
         pledgeId: data.pledgeId || null,
-        receiptNumber,
         recordedById: session.user.id,
-      },
+        auditAction: "CREATE_TRANSACTION",
+      });
     });
 
-    // If pledge payment, update pledge amountPaid
-    if (data.type === "PLEDGE_PAYMENT" && data.pledgeId) {
-      const pledge = await tx.pledge.findUnique({
-        where: { id: data.pledgeId },
-      });
-      if (pledge) {
-        const newAmountPaid = Number(pledge.amountPaid) + data.amount;
-        await tx.pledge.update({
-          where: { id: data.pledgeId },
-          data: {
-            amountPaid: newAmountPaid,
-            status: newAmountPaid >= Number(pledge.amount) ? "FULFILLED" : "ACTIVE",
-          },
-        });
-      }
-    }
+    revalidatePath("/admin/finance");
+    revalidatePath("/finance");
+    revalidatePath("/my-giving");
 
-    return txn;
-  });
-
-  // Audit log
-  await prisma.auditLog.create({
-    data: {
-      action: "CREATE_TRANSACTION",
-      entity: "FinancialTransaction",
-      entityId: transaction.id,
-      details: JSON.stringify({
-        type: data.type,
-        amount: data.amount,
-        receiptNumber,
-      }),
-      userId: session.user.id,
-    },
-  });
-
-      revalidatePath("/admin/finance");
-      revalidatePath("/finance");
-      revalidatePath("/my-giving");
-
-      return { success: true, receiptNumber };
-    } catch (err: unknown) {
-      if (isUniqueViolation(err) && retries > 1) {
-        retries--;
-        continue;
-      }
-      console.error("createTransaction error:", err);
-      return { success: false, error: "Failed to record transaction. Please try again." };
-    }
+    return { success: true, receiptNumber: transaction.receiptNumber };
+  } catch (err: unknown) {
+    console.error("createTransaction error:", err);
+    return { success: false, error: "Failed to record transaction. Please try again." };
   }
-
-  return { success: false, error: "Could not generate a unique receipt number. Please try again." };
 }
 
 export async function createPledge(formData: FormData) {
@@ -159,7 +94,7 @@ export async function createPledge(formData: FormData) {
         amount: data.amount,
         amountPaid: 0,
         startDate: new Date(data.startDate),
-        endDate: new Date(data.endDate),
+        endDate: data.endDate ? new Date(data.endDate) : null,
         status: "ACTIVE",
         memberId: data.memberId,
       },

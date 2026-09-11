@@ -7,12 +7,14 @@ declare module "next-auth" {
       id: string;
       role: UserRole;
       status: "PENDING" | "ACTIVE" | "INACTIVE";
+      tokenVersion?: number;
     } & DefaultSession["user"];
   }
 
   interface User {
     role: UserRole;
     status: "PENDING" | "ACTIVE" | "INACTIVE";
+    tokenVersion?: number;
   }
 }
 
@@ -21,5 +23,7 @@ declare module "next-auth/jwt" {
     id: string;
     role: UserRole;
     status: "PENDING" | "ACTIVE" | "INACTIVE";
+    tv?: number;
+    chk?: number;
   }
 }

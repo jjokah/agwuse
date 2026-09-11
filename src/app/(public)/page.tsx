@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Event, Sermon } from "@prisma/client";
 import { ArrowRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { CHURCH_INFO } from "@/lib/constants";
