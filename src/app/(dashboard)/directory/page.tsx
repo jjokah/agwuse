@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Input } from "@/components/ui/input";
 import { Users } from "lucide-react";
+import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { PaginationBar } from "@/components/shared/pagination-bar";
+import type { Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
   title: "Member Directory",
@@ -11,34 +14,44 @@ export const metadata: Metadata = {
 export default async function DirectoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; pageSize?: string }>;
 }) {
-  const { q } = await searchParams;
+  const params = await searchParams;
+  const { q } = params;
+  const { page, pageSize, skip, take } = parsePageParams(params);
 
-  const members = await prisma.user.findMany({
-    where: {
-      status: "ACTIVE",
-      ...(q
-        ? {
-            OR: [
-              { firstName: { contains: q, mode: "insensitive" } },
-              { lastName: { contains: q, mode: "insensitive" } },
-              { email: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    select: {
-      id: true,
-      firstName: true,
-      lastName: true,
-      email: true,
-      phone: true,
-      department: { select: { name: true } },
-    },
-    orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-    take: 100,
-  });
+  const where: Prisma.UserWhereInput = {
+    status: "ACTIVE",
+    ...(q
+      ? {
+          OR: [
+            { firstName: { contains: q, mode: "insensitive" } },
+            { lastName: { contains: q, mode: "insensitive" } },
+            { email: { contains: q, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+
+  const [members, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        department: { select: { name: true } },
+      },
+      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+      skip,
+      take,
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  const meta = pageMeta({ totalItems: total, page, pageSize });
 
   return (
     <div className="space-y-6">
@@ -70,26 +83,34 @@ export default async function DirectoryPage({
           }
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {members.map((member) => (
-            <div
-              key={member.id}
-              className="rounded-lg border bg-card p-4"
-            >
-              <p className="font-semibold">
-                {member.firstName} {member.lastName}
-              </p>
-              <p className="text-sm text-muted-foreground">{member.email}</p>
-              {member.phone && (
-                <p className="text-sm text-muted-foreground">{member.phone}</p>
-              )}
-              {member.department && (
-                <p className="mt-1 text-xs text-brand-gold-dark">
-                  {member.department.name}
+        <div className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {members.map((member) => (
+              <div
+                key={member.id}
+                className="rounded-lg border bg-card p-4"
+              >
+                <p className="font-semibold">
+                  {member.firstName} {member.lastName}
                 </p>
-              )}
-            </div>
-          ))}
+                <p className="text-sm text-muted-foreground">{member.email}</p>
+                {member.phone && (
+                  <p className="text-sm text-muted-foreground">{member.phone}</p>
+                )}
+                {member.department && (
+                  <p className="mt-1 text-xs text-brand-gold-dark">
+                    {member.department.name}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <PaginationBar
+            meta={meta}
+            basePath="/directory"
+            searchParams={params}
+          />
         </div>
       )}
     </div>

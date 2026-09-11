@@ -8,6 +8,8 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Heart, TrendingUp, Calendar } from "lucide-react";
+import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { PaginationBar } from "@/components/shared/pagination-bar";
 
 export const metadata: Metadata = {
   title: "My Giving",
@@ -55,30 +57,42 @@ const columns: Column<Transaction>[] = [
   },
 ];
 
-export default async function MyGivingPage() {
+export default async function MyGivingPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ page?: string; pageSize?: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const [transactions, aggregate, thisYearAggregate] = await Promise.all([
+  const params = searchParams ? await searchParams : {};
+  const { page, pageSize, skip, take } = parsePageParams(params, { defaultSize: 20 });
+
+  const where = { memberId: session.user.id, type: { not: "EXPENSE" as const } };
+
+  const [transactions, aggregate, thisYearAggregate, total] = await Promise.all([
     prisma.financialTransaction.findMany({
-      where: { memberId: session.user.id, type: { not: "EXPENSE" } },
+      where,
       orderBy: { date: "desc" },
-      take: 50,
+      skip,
+      take,
     }),
     prisma.financialTransaction.aggregate({
-      where: { memberId: session.user.id, type: { not: "EXPENSE" } },
+      where,
       _sum: { amount: true },
       _count: true,
     }),
     prisma.financialTransaction.aggregate({
       where: {
-        memberId: session.user.id,
-        type: { not: "EXPENSE" },
+        ...where,
         date: { gte: new Date(new Date().getFullYear(), 0, 1) },
       },
       _sum: { amount: true },
     }),
+    prisma.financialTransaction.count({ where }),
   ]);
+
+  const meta = pageMeta({ totalItems: total, page, pageSize });
 
   const totalGiving = aggregate._sum.amount
     ? Number(aggregate._sum.amount)
@@ -125,11 +139,18 @@ export default async function MyGivingPage() {
           description="Your giving history will appear here once transactions are recorded."
         />
       ) : (
-        <DataTable
-          columns={columns}
-          data={data}
-          keyExtractor={(tx) => tx.id}
-        />
+        <div className="space-y-4">
+          <DataTable
+            columns={columns}
+            data={data}
+            keyExtractor={(tx) => tx.id}
+          />
+          <PaginationBar
+            meta={meta}
+            basePath="/my-giving"
+            searchParams={params}
+          />
+        </div>
       )}
     </div>
   );

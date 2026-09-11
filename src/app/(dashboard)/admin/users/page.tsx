@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ROLE_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
+import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { PaginationBar } from "@/components/shared/pagination-bar";
+import { FilterSelect, FilterSubmit } from "@/components/shared/filter-select";
 import {
   Table,
   TableBody,
@@ -16,20 +19,37 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Users } from "lucide-react";
+import type { UserRole, UserStatus, Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
   title: "User Management",
 };
 
+const STATUS_OPTIONS = [
+  { value: "ACTIVE", label: "Active" },
+  { value: "PENDING", label: "Pending" },
+  { value: "INACTIVE", label: "Inactive" },
+];
+
+const ROLE_OPTIONS = [
+  { value: "MEMBER", label: "Member" },
+  { value: "DEPT_LEAD", label: "Dept Lead" },
+  { value: "FINANCE", label: "Finance" },
+  { value: "ADMIN", label: "Admin" },
+  { value: "SUPER_ADMIN", label: "Super Admin" },
+];
+
 export default async function AdminUsersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; role?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; role?: string; page?: string; pageSize?: string }>;
 }) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
-  const { q, status, role } = await searchParams;
+  const params = await searchParams;
+  const { q, status, role } = params;
+  const { page, pageSize, skip, take } = parsePageParams(params);
 
-  const where: Record<string, unknown> = {};
+  const where: Prisma.UserWhereInput = {};
   if (q) {
     where.OR = [
       { firstName: { contains: q, mode: "insensitive" } },
@@ -37,15 +57,30 @@ export default async function AdminUsersPage({
       { email: { contains: q, mode: "insensitive" } },
     ];
   }
-  if (status) where.status = status;
-  if (role) where.role = role;
+  if (status) where.status = status as UserStatus;
+  if (role) where.role = role as UserRole;
 
-  const users = await prisma.user.findMany({
-    where,
-    include: { department: { select: { name: true } } },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        status: true,
+        createdAt: true,
+        department: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take,
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  const meta = pageMeta({ totalItems: total, page, pageSize });
 
   const statusColor: Record<string, string> = {
     ACTIVE: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
@@ -61,41 +96,26 @@ export default async function AdminUsersPage({
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
-        <form className="flex gap-3">
+        <form className="flex flex-wrap items-center gap-3">
           <Input
             name="q"
             placeholder="Search name or email..."
             defaultValue={q || ""}
             className="w-64"
           />
-          <select
+          <FilterSelect
             name="status"
+            placeholder="All Status"
             defaultValue={status || ""}
-            className="h-9 rounded-md border bg-background px-3 text-sm"
-          >
-            <option value="">All Status</option>
-            <option value="ACTIVE">Active</option>
-            <option value="PENDING">Pending</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
-          <select
+            options={STATUS_OPTIONS}
+          />
+          <FilterSelect
             name="role"
+            placeholder="All Roles"
             defaultValue={role || ""}
-            className="h-9 rounded-md border bg-background px-3 text-sm"
-          >
-            <option value="">All Roles</option>
-            <option value="MEMBER">Member</option>
-            <option value="DEPT_LEAD">Dept Lead</option>
-            <option value="FINANCE">Finance</option>
-            <option value="ADMIN">Admin</option>
-            <option value="SUPER_ADMIN">Super Admin</option>
-          </select>
-          <button
-            type="submit"
-            className="h-9 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            Filter
-          </button>
+            options={ROLE_OPTIONS}
+          />
+          <FilterSubmit text="Filter" />
         </form>
       </div>
 
@@ -106,55 +126,63 @@ export default async function AdminUsersPage({
           description="Try adjusting your search or filters."
         />
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Joined</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <Link
-                      href={`/admin/users/${user.id}`}
-                      className="font-medium hover:text-brand-gold-dark hover:underline"
-                    >
-                      {user.firstName} {user.lastName}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {user.email}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">
-                      {ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] ||
-                        user.role}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColor[user.status] || ""}`}
-                    >
-                      {user.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {user.department?.name || "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {formatDate(user.createdAt)}
-                  </TableCell>
+        <div className="space-y-4">
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Joined</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <Link
+                        href={`/admin/users/${user.id}`}
+                        className="font-medium hover:text-brand-gold-dark hover:underline"
+                      >
+                        {user.firstName} {user.lastName}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.email}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] ||
+                          user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColor[user.status] || ""}`}
+                      >
+                        {user.status}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {user.department?.name || "—"}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {formatDate(user.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <PaginationBar
+            meta={meta}
+            basePath="/admin/users"
+            searchParams={params}
+          />
         </div>
       )}
     </div>

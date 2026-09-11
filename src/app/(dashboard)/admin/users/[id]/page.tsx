@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { requireRole } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ROLE_LABELS } from "@/lib/constants";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { UserActions } from "./user-actions";
+
+import { getUserById, getUserGivingSummary } from "@/lib/data/users";
 
 export async function generateMetadata({
   params,
@@ -16,10 +17,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const user = await prisma.user.findUnique({
-    where: { id },
-    select: { firstName: true, lastName: true },
-  });
+  const user = await getUserById(id);
   return {
     title: user ? `${user.firstName} ${user.lastName}` : "User Not Found",
   };
@@ -33,28 +31,12 @@ export default async function AdminUserDetailPage({
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   const { id } = await params;
 
-  const user = await prisma.user.findUnique({
-    where: { id },
-    include: { department: { select: { name: true } } },
-  });
+  const [user, { transactions, totalGiving }] = await Promise.all([
+    getUserById(id),
+    getUserGivingSummary(id),
+  ]);
 
   if (!user) notFound();
-
-  // Get user's giving history
-  const transactions = await prisma.financialTransaction.findMany({
-    where: { memberId: id, type: { not: "EXPENSE" } },
-    orderBy: { date: "desc" },
-    take: 10,
-  });
-
-  const givingTotal = await prisma.financialTransaction.aggregate({
-    where: { memberId: id, type: { not: "EXPENSE" } },
-    _sum: { amount: true },
-  });
-
-  const totalGiving = givingTotal._sum.amount
-    ? Number(givingTotal._sum.amount)
-    : 0;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">

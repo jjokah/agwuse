@@ -4,6 +4,9 @@ import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { PaginationBar } from "@/components/shared/pagination-bar";
+import { FilterSelect, FilterSubmit } from "@/components/shared/filter-select";
 import {
   Table,
   TableBody,
@@ -14,18 +17,46 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PlusCircle, Calendar } from "lucide-react";
+import type { EventType, Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
   title: "Events Management",
 };
 
-export default async function AdminEventsPage() {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+const EVENT_TYPE_OPTIONS = [
+  { value: "SERVICE", label: "Service" },
+  { value: "REVIVAL", label: "Revival" },
+  { value: "CONFERENCE", label: "Conference" },
+  { value: "OUTREACH", label: "Outreach" },
+  { value: "HARVEST", label: "Harvest" },
+  { value: "OTHER", label: "Other" },
+];
 
-  const events = await prisma.event.findMany({
-    include: { createdBy: { select: { firstName: true, lastName: true } } },
-    orderBy: { startDate: "desc" },
-  });
+export default async function AdminEventsPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ type?: string; page?: string; pageSize?: string }>;
+}) {
+  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const params = searchParams ? await searchParams : {};
+  const { type } = params;
+  const { page, pageSize, skip, take } = parsePageParams(params);
+
+  const where: Prisma.EventWhereInput = {};
+  if (type) where.type = type as EventType;
+
+  const [events, total] = await Promise.all([
+    prisma.event.findMany({
+      where,
+      include: { createdBy: { select: { firstName: true, lastName: true } } },
+      orderBy: { startDate: "desc" },
+      skip,
+      take,
+    }),
+    prisma.event.count({ where }),
+  ]);
+
+  const meta = pageMeta({ totalItems: total, page, pageSize });
 
   return (
     <div className="space-y-6">
@@ -40,6 +71,17 @@ export default async function AdminEventsPage() {
         </Link>
       </div>
 
+      {/* Filters */}
+      <form className="flex items-center gap-3">
+        <FilterSelect
+          name="type"
+          placeholder="All Types"
+          defaultValue={type || ""}
+          options={EVENT_TYPE_OPTIONS}
+        />
+        <FilterSubmit text="Filter" />
+      </form>
+
       {events.length === 0 ? (
         <EmptyState
           icon={<Calendar />}
@@ -47,44 +89,52 @@ export default async function AdminEventsPage() {
           description="Create your first event."
         />
       ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {events.map((event) => (
-                <TableRow key={event.id}>
-                  <TableCell className="max-w-64 truncate font-medium">
-                    {event.title}
-                  </TableCell>
-                  <TableCell>{formatDate(event.startDate)}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{event.type}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={event.isPublished ? "default" : "secondary"}>
-                      {event.isPublished ? "Published" : "Draft"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/admin/content/events/${event.id}`}
-                      className="text-sm text-brand-gold-dark hover:underline"
-                    >
-                      Edit
-                    </Link>
-                  </TableCell>
+        <div className="space-y-4">
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {events.map((event) => (
+                  <TableRow key={event.id}>
+                    <TableCell className="max-w-64 truncate font-medium">
+                      {event.title}
+                    </TableCell>
+                    <TableCell>{formatDate(event.startDate)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{event.type}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={event.isPublished ? "default" : "secondary"}>
+                        {event.isPublished ? "Published" : "Draft"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/admin/content/events/${event.id}`}
+                        className="text-sm text-brand-gold-dark hover:underline"
+                      >
+                        Edit
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+
+          <PaginationBar
+            meta={meta}
+            basePath="/admin/content/events"
+            searchParams={params}
+          />
         </div>
       )}
     </div>

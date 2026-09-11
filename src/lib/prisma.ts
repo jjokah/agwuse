@@ -2,9 +2,14 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 
+function getDatabasePoolMax(): number {
+  const parsed = parseInt(process.env.DATABASE_POOL_MAX || "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
+}
+
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL!;
-  const pool = new pg.Pool({ connectionString, max: 5 });
+  const pool = new pg.Pool({ connectionString, max: getDatabasePoolMax() });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }

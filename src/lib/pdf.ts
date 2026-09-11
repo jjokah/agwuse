@@ -97,7 +97,7 @@ export function generateReceiptPDF(receipt: {
   doc.save(`receipt-${receipt.receiptNumber}.pdf`);
 }
 
-export function generateReportPDF(
+export function buildReportPDFDoc(
   summary: {
     period: string;
     totalIncome: number;
@@ -108,7 +108,7 @@ export function generateReportPDF(
     transactionCount: number;
   },
   transactions: Record<string, string>[]
-) {
+): jsPDF {
   const doc = new jsPDF();
   addChurchHeader(doc);
 
@@ -169,7 +169,7 @@ export function generateReportPDF(
     });
 
     y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
-  y += 10;
+    y += 10;
   }
 
   // Expense breakdown
@@ -194,19 +194,20 @@ export function generateReportPDF(
     });
 
     y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
-  y += 10;
+    y += 10;
   }
 
-  // Transaction detail table (new page if needed)
+  // Transaction list (if any)
   if (transactions.length > 0) {
+    // Check if we need a page break
     if (y > 220) {
       doc.addPage();
-      y = 15;
+      y = 20;
     }
 
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text("Transaction Details", 15, y);
+    doc.text("Transactions", 15, y);
     y += 5;
 
     const headers = ["Date", "Receipt #", "Type", "Member", "Method", "Amount"];
@@ -233,7 +234,7 @@ export function generateReportPDF(
     });
   }
 
-  // Footer on last page
+  // Footer on each page
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
@@ -247,5 +248,37 @@ export function generateReportPDF(
     );
   }
 
+  return doc;
+}
+
+export function buildReportPDFBuffer(
+  summary: {
+    period: string;
+    totalIncome: number;
+    totalExpense: number;
+    netIncome: number;
+    incomeByType: Record<string, number>;
+    expenseByCategory: Record<string, number>;
+    transactionCount: number;
+  },
+  transactions: Record<string, string>[]
+): ArrayBuffer {
+  const doc = buildReportPDFDoc(summary, transactions);
+  return doc.output("arraybuffer");
+}
+
+export function generateReportPDF(
+  summary: {
+    period: string;
+    totalIncome: number;
+    totalExpense: number;
+    netIncome: number;
+    incomeByType: Record<string, number>;
+    expenseByCategory: Record<string, number>;
+    transactionCount: number;
+  },
+  transactions: Record<string, string>[]
+) {
+  const doc = buildReportPDFDoc(summary, transactions);
   doc.save(`agwuse-report-${Date.now()}.pdf`);
 }

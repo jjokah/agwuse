@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createDepartment, updateDepartment } from "@/lib/actions/content-actions";
+import { MemberCombobox } from "@/components/shared/member-combobox";
 import { toast } from "sonner";
 
 interface DepartmentFormProps {
@@ -24,7 +25,8 @@ interface DepartmentFormProps {
     category: string;
     leaderId: string | null;
   };
-  members: { id: string; firstName: string; lastName: string }[];
+  leaderName?: string;
+  members?: { id: string; firstName: string; lastName: string }[];
 }
 
 const CATEGORIES = [
@@ -34,21 +36,30 @@ const CATEGORIES = [
   { value: "OUTREACH", label: "Outreach" },
 ];
 
-export function DepartmentForm({ department, members }: DepartmentFormProps) {
+export function DepartmentForm({ department, leaderName }: DepartmentFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
     try {
-      const result = department
-        ? await updateDepartment(department.id, formData)
-        : await createDepartment(formData);
-      if (result.success) {
-        toast.success(department ? "Department updated" : "Department created");
-        router.push("/admin/settings/departments");
+      if (department) {
+        formData.append("id", department.id);
+        const result = await updateDepartment(department.id, formData);
+        if (result.success) {
+          toast.success("Department updated successfully");
+          router.push("/admin/settings/departments");
+        } else {
+          toast.error(result.error || "Failed to update department");
+        }
       } else {
-        toast.error(result.error || "Failed to save");
+        const result = await createDepartment(formData);
+        if (result.success) {
+          toast.success("Department created successfully");
+          router.push("/admin/settings/departments");
+        } else {
+          toast.error(result.error || "Failed to create department");
+        }
       }
     } catch {
       toast.error("An unexpected error occurred");
@@ -61,13 +72,19 @@ export function DepartmentForm({ department, members }: DepartmentFormProps) {
     <form action={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="name">Department Name</Label>
-        <Input id="name" name="name" required defaultValue={department?.name || ""} />
+        <Input
+          id="name"
+          name="name"
+          required
+          defaultValue={department?.name || ""}
+          placeholder="e.g., Youth Ministry"
+        />
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="category">Category</Label>
         <Select name="category" defaultValue={department?.category || "MINISTRY"}>
-          <SelectTrigger>
+          <SelectTrigger id="category">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -82,18 +99,12 @@ export function DepartmentForm({ department, members }: DepartmentFormProps) {
 
       <div className="space-y-2">
         <Label htmlFor="leaderId">Department Leader (optional)</Label>
-        <Select name="leaderId" defaultValue={department?.leaderId || ""}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select leader" />
-          </SelectTrigger>
-          <SelectContent>
-            {members.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.firstName} {m.lastName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <MemberCombobox
+          name="leaderId"
+          defaultValue={department?.leaderId || ""}
+          defaultMemberName={leaderName}
+          placeholder="Search member by name, email, or phone..."
+        />
       </div>
 
       <div className="space-y-2">

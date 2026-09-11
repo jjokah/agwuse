@@ -17,16 +17,16 @@ export default async function EditDepartmentPage({
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   const { id } = await params;
 
-  const [department, members] = await Promise.all([
-    prisma.department.findUnique({ where: { id } }),
-    prisma.user.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, firstName: true, lastName: true },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-    }),
-  ]);
+  const department = await prisma.department.findUnique({
+    where: { id },
+    include: { leader: { select: { firstName: true, lastName: true } } },
+  });
 
   if (!department) notFound();
+
+  const leaderName = department.leader
+    ? `${department.leader.firstName} ${department.leader.lastName}`
+    : undefined;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -38,9 +38,11 @@ export default async function EditDepartmentPage({
         Back to Departments
       </Link>
       <Card>
-        <CardHeader><CardTitle>Edit Department</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Edit Department</CardTitle>
+        </CardHeader>
         <CardContent>
-          <DepartmentForm department={department} members={members} />
+          <DepartmentForm department={department} leaderName={leaderName} />
         </CardContent>
       </Card>
     </div>

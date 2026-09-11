@@ -14,10 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createTransaction } from "@/lib/actions/finance-actions";
+import { MemberCombobox } from "@/components/shared/member-combobox";
 import { toast } from "sonner";
 
-interface TransactionFormProps {
-  members: { id: string; firstName: string; lastName: string }[];
+export interface TransactionFormProps {
   categories: { id: string; name: string; type: string }[];
   redirectTo?: string;
 }
@@ -50,7 +50,10 @@ const OFFERING_CATEGORIES = [
   { value: "OTHER", label: "Other" },
 ];
 
-export function TransactionForm({ members, categories, redirectTo = "/admin/finance/transactions" }: TransactionFormProps) {
+export function TransactionForm({
+  categories,
+  redirectTo = "/admin/finance/transactions",
+}: TransactionFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [txType, setTxType] = useState("");
@@ -80,8 +83,14 @@ export function TransactionForm({ members, categories, redirectTo = "/admin/fina
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="type">Transaction Type</Label>
-          <Select name="type" required onValueChange={(v) => { if (typeof v === "string") setTxType(v); }}>
-            <SelectTrigger>
+          <Select
+            name="type"
+            required
+            onValueChange={(v) => {
+              if (typeof v === "string") setTxType(v);
+            }}
+          >
+            <SelectTrigger id="type">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
@@ -112,7 +121,7 @@ export function TransactionForm({ members, categories, redirectTo = "/admin/fina
         <div className="space-y-2">
           <Label htmlFor="paymentMethod">Payment Method</Label>
           <Select name="paymentMethod" required>
-            <SelectTrigger>
+            <SelectTrigger id="paymentMethod">
               <SelectValue placeholder="Select method" />
             </SelectTrigger>
             <SelectContent>
@@ -137,22 +146,14 @@ export function TransactionForm({ members, categories, redirectTo = "/admin/fina
         </div>
       </div>
 
-      {/* Member (for income types) */}
+      {/* Member combobox (for income types) */}
       {!isExpense && (
         <div className="space-y-2">
           <Label htmlFor="memberId">Member (optional)</Label>
-          <Select name="memberId">
-            <SelectTrigger>
-              <SelectValue placeholder="Select member" />
-            </SelectTrigger>
-            <SelectContent>
-              {members.map((m) => (
-                <SelectItem key={m.id} value={m.id}>
-                  {m.firstName} {m.lastName}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <MemberCombobox
+            name="memberId"
+            placeholder="Search member by name, email, or phone..."
+          />
         </div>
       )}
 
@@ -161,7 +162,7 @@ export function TransactionForm({ members, categories, redirectTo = "/admin/fina
         <div className="space-y-2">
           <Label htmlFor="offeringCategory">Offering Category</Label>
           <Select name="offeringCategory">
-            <SelectTrigger>
+            <SelectTrigger id="offeringCategory">
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
@@ -180,7 +181,7 @@ export function TransactionForm({ members, categories, redirectTo = "/admin/fina
         <div className="space-y-2">
           <Label htmlFor="categoryId">Expense Category</Label>
           <Select name="categoryId">
-            <SelectTrigger>
+            <SelectTrigger id="categoryId">
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
@@ -207,7 +208,12 @@ export function TransactionForm({ members, categories, redirectTo = "/admin/fina
 
       <div className="space-y-2">
         <Label htmlFor="notes">Notes (optional)</Label>
-        <Textarea id="notes" name="notes" rows={3} placeholder="Additional details..." />
+        <Textarea
+          id="notes"
+          name="notes"
+          rows={3}
+          placeholder="Additional details..."
+        />
       </div>
 
       <Button type="submit" className="w-full" disabled={loading}>

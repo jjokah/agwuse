@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TransactionForm } from "./transaction-form";
+import { TransactionForm } from "@/components/finance/transaction-form";
 
 export const metadata: Metadata = {
   title: "Record Transaction",
@@ -13,17 +13,10 @@ export const metadata: Metadata = {
 export default async function NewTransactionPage() {
   await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
 
-  const [members, categories] = await Promise.all([
-    prisma.user.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, firstName: true, lastName: true },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-    }),
-    prisma.financialCategory.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const categories = await prisma.financialCategory.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+  });
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -40,10 +33,7 @@ export default async function NewTransactionPage() {
           <CardTitle>Record Transaction</CardTitle>
         </CardHeader>
         <CardContent>
-          <TransactionForm
-            members={members}
-            categories={categories}
-          />
+          <TransactionForm categories={categories} />
         </CardContent>
       </Card>
     </div>

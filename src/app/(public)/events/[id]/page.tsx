@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Calendar, MapPin, Clock } from "lucide-react";
-import { prisma } from "@/lib/prisma";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { MediaImage } from "@/components/public/media-image";
 import { sanitizeHtml, stripHtml } from "@/lib/sanitize";
+
+import { getEventById } from "@/lib/data/content";
 
 export async function generateMetadata({
   params,
@@ -13,9 +14,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const event = await prisma.event.findUnique({
-    where: { id, isPublished: true },
-  });
+  const event = await getEventById(id);
 
   if (!event) return { title: "Event Not Found" };
   return {
@@ -31,9 +30,7 @@ export default async function EventDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const event = await prisma.event.findUnique({
-    where: { id, isPublished: true },
-  });
+  const event = await getEventById(id);
 
   if (!event) notFound();
 

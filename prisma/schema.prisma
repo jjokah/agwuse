@@ -211,11 +211,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([email])
   @@index([role])
   @@index([status])
   @@index([departmentId])
   @@index([firstName, lastName])
+  @@index([createdAt])
   @@map("users")
 }
 
@@ -234,6 +234,8 @@ model Department {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([isActive])
+  @@index([category, name])
   @@map("departments")
 }
 
@@ -273,6 +275,7 @@ model FinancialTransaction {
   @@index([category])
   @@index([recordedById])
   @@index([date, type])
+  @@index([createdAt])
   @@map("financial_transactions")
 }
 
@@ -326,6 +329,7 @@ model Pledge {
 
   @@index([memberId])
   @@index([status])
+  @@index([createdAt])
   @@map("pledges")
 }
 
@@ -362,10 +366,10 @@ model BlogPost {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([slug])
   @@index([type])
   @@index([published])
   @@index([publishedAt])
+  @@index([published, type, publishedAt])
   @@map("blog_posts")
 }
 
@@ -409,6 +413,7 @@ model Submission {
 
   @@index([type])
   @@index([status])
+  @@index([status, createdAt])
   @@map("submissions")
 }
 
@@ -423,6 +428,7 @@ model GalleryImage {
   createdAt DateTime @default(now())
 
   @@index([albumName])
+  @@index([albumName, sortOrder])
   @@map("gallery_images")
 }
 
