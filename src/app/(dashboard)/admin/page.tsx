@@ -33,6 +33,7 @@ export default async function AdminDashboardPage() {
       where: {
         type: { not: "EXPENSE" },
         date: { gte: startOfYear },
+        voidedAt: null,
       },
       _sum: { amount: true },
     }),

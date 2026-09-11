@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PlusCircle, Receipt } from "lucide-react";
+import { VoidTransactionDialog } from "@/components/finance/void-dialog";
 import type { TransactionType, PaymentMethod, Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
@@ -161,19 +162,27 @@ export default async function TransactionsPage({
                   <TableHead>Member</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {transactions.map((tx) => (
-                  <TableRow key={tx.id}>
+                  <TableRow key={tx.id} className={tx.voidedAt ? "opacity-60 bg-muted/30" : ""}>
                     <TableCell>{formatDate(tx.date)}</TableCell>
                     <TableCell className="font-mono text-xs">
                       {tx.receiptNumber || "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={tx.type === "EXPENSE" ? "destructive" : "outline"}>
-                        {tx.type.replace("_", " ")}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant={tx.type === "EXPENSE" ? "destructive" : "outline"}>
+                          {tx.type.replace("_", " ")}
+                        </Badge>
+                        {tx.voidedAt && (
+                          <Badge variant="destructive" className="text-[10px] uppercase">
+                            Voided
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {tx.member
@@ -187,6 +196,25 @@ export default async function TransactionsPage({
                       }`}
                     >
                       {formatCurrency(Number(tx.amount))}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <a
+                          href={`/api/finance/receipts/${tx.id}`}
+                          download
+                          title="Download Receipt PDF"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-xs font-medium text-foreground hover:bg-muted"
+                        >
+                          <Receipt className="size-3.5" />
+                        </a>
+                        {!tx.voidedAt && (
+                          <VoidTransactionDialog
+                            transactionId={tx.id}
+                            receiptNumber={tx.receiptNumber}
+                            amount={formatCurrency(Number(tx.amount))}
+                          />
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

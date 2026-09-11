@@ -43,6 +43,7 @@ export const departmentSchema = z.object({
   description: z.string().optional(),
   category: z.enum(["MINISTRY", "COMMITTEE", "CHOIR", "OUTREACH"]),
   leaderId: z.string().optional(),
+  isActive: z.boolean().optional(),
 });
 
 export const liveStreamSchema = z.object({

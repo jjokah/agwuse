@@ -201,6 +201,7 @@ model User {
   ledDepartments       Department[]           @relation("DepartmentLeader")
   transactions         FinancialTransaction[] @relation("TransactionMember")
   recordedTransactions FinancialTransaction[] @relation("TransactionRecordedBy")
+  voidedTransactions   FinancialTransaction[] @relation("TransactionVoidedBy")
   pledges              Pledge[]
   paymentIntents       PaymentIntent[]
   blogPosts            BlogPost[]
@@ -266,6 +267,11 @@ model FinancialTransaction {
   pledge        Pledge?        @relation(fields: [pledgeId], references: [id])
   paymentIntent PaymentIntent?
 
+  voidedAt   DateTime?
+  voidedById String?
+  voidedBy   User?     @relation("TransactionVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+  voidReason String?   @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -276,6 +282,7 @@ model FinancialTransaction {
   @@index([recordedById])
   @@index([date, type])
   @@index([createdAt])
+  @@index([voidedAt])
   @@map("financial_transactions")
 }
 

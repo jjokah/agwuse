@@ -13,8 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createTransaction } from "@/lib/actions/finance-actions";
+import { createTransaction, getMemberActivePledges } from "@/lib/actions/finance-actions";
 import { MemberCombobox } from "@/components/shared/member-combobox";
+import type { MemberSearchResult } from "@/lib/actions/member-search-actions";
+import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 
 export interface TransactionFormProps {
@@ -50,6 +52,12 @@ const OFFERING_CATEGORIES = [
   { value: "OTHER", label: "Other" },
 ];
 
+interface ActivePledge {
+  id: string;
+  title: string;
+  remaining: number;
+}
+
 export function TransactionForm({
   categories,
   redirectTo = "/admin/finance/transactions",
@@ -57,12 +65,47 @@ export function TransactionForm({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [txType, setTxType] = useState("");
+  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [memberPledges, setMemberPledges] = useState<ActivePledge[]>([]);
+  const [pledgeId, setPledgeId] = useState<string>("none");
 
   const isExpense = txType === "EXPENSE";
   const isOffering = txType === "OFFERING";
+  const isPledgePayment = txType === "PLEDGE_PAYMENT";
+
+  async function handleMemberChange(member: MemberSearchResult | null) {
+    const id = member ? member.id : "";
+    setSelectedMemberId(id);
+    setPledgeId("none");
+    if (!id) {
+      setMemberPledges([]);
+      return;
+    }
+    try {
+      const pledges = await getMemberActivePledges(id);
+      setMemberPledges(pledges);
+      if (pledges.length > 0 && isPledgePayment) {
+        setPledgeId(pledges[0].id);
+      }
+    } catch {
+      setMemberPledges([]);
+    }
+  }
 
   async function handleSubmit(formData: FormData) {
+    if (isPledgePayment && (!selectedMemberId || pledgeId === "none")) {
+      toast.error("Please select both a church member and their pledge for a pledge payment.");
+      return;
+    }
+
     setLoading(true);
+    if (selectedMemberId) {
+      formData.set("memberId", selectedMemberId);
+    }
+    if (pledgeId && pledgeId !== "none") {
+      formData.set("pledgeId", pledgeId);
+    }
+
     try {
       const result = await createTransaction(formData);
       if (result.success) {
@@ -82,12 +125,17 @@ export function TransactionForm({
     <form action={handleSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="type">Transaction Type</Label>
+          <Label htmlFor="type">Transaction Type *</Label>
           <Select
             name="type"
             required
             onValueChange={(v) => {
-              if (typeof v === "string") setTxType(v);
+              if (typeof v === "string") {
+                setTxType(v);
+                if (v === "PLEDGE_PAYMENT" && memberPledges.length > 0 && pledgeId === "none") {
+                  setPledgeId(memberPledges[0].id);
+                }
+              }
             }}
           >
             <SelectTrigger id="type">
@@ -104,13 +152,13 @@ export function TransactionForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="amount">Amount (NGN)</Label>
+          <Label htmlFor="amount">Amount (NGN) *</Label>
           <Input
             id="amount"
             name="amount"
             type="number"
             step="0.01"
-            min="0"
+            min="0.01"
             required
             placeholder="0.00"
           />
@@ -119,8 +167,8 @@ export function TransactionForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="paymentMethod">Payment Method</Label>
-          <Select name="paymentMethod" required>
+          <Label htmlFor="paymentMethod">Payment Method *</Label>
+          <Select name="paymentMethod" required defaultValue="CASH">
             <SelectTrigger id="paymentMethod">
               <SelectValue placeholder="Select method" />
             </SelectTrigger>
@@ -135,7 +183,7 @@ export function TransactionForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="date">Date</Label>
+          <Label htmlFor="date">Date *</Label>
           <Input
             id="date"
             name="date"
@@ -149,11 +197,41 @@ export function TransactionForm({
       {/* Member combobox (for income types) */}
       {!isExpense && (
         <div className="space-y-2">
-          <Label htmlFor="memberId">Member (optional)</Label>
+          <Label htmlFor="memberId">
+            Member {isPledgePayment ? "*" : "(optional)"}
+          </Label>
           <MemberCombobox
             name="memberId"
+            onSelect={handleMemberChange}
             placeholder="Search member by name, email, or phone..."
           />
+        </div>
+      )}
+
+      {/* Pledge Link */}
+      {!isExpense && selectedMemberId && (memberPledges.length > 0 || isPledgePayment) && (
+        <div className="space-y-2">
+          <Label htmlFor="pledgeId">
+            Link to Active Pledge {isPledgePayment ? "*" : "(optional)"}
+          </Label>
+          <Select value={pledgeId} onValueChange={(val) => setPledgeId(val || "none")}>
+            <SelectTrigger id="pledgeId">
+              <SelectValue placeholder="Select pledge to credit" />
+            </SelectTrigger>
+            <SelectContent>
+              {!isPledgePayment && <SelectItem value="none">No Pledge Linked</SelectItem>}
+              {memberPledges.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.title} (Remaining: {formatCurrency(p.remaining)})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {isPledgePayment && memberPledges.length === 0 && (
+            <p className="text-xs text-destructive">
+              This member has no active pledges. Create a pledge first or choose a different type.
+            </p>
+          )}
         </div>
       )}
 
@@ -161,7 +239,7 @@ export function TransactionForm({
       {isOffering && (
         <div className="space-y-2">
           <Label htmlFor="offeringCategory">Offering Category</Label>
-          <Select name="offeringCategory">
+          <Select name="offeringCategory" defaultValue="GENERAL">
             <SelectTrigger id="offeringCategory">
               <SelectValue placeholder="Select category" />
             </SelectTrigger>

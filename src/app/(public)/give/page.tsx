@@ -21,7 +21,11 @@ const GIVING_CATEGORIES = [
   "Special Projects",
 ];
 
-export default function GivePage() {
+import { getChurchInfo } from "@/lib/settings";
+
+export default async function GivePage() {
+  const churchInfo = await getChurchInfo();
+
   return (
     <>
       <PageHero eyebrow="Generosity" title="Give" />
@@ -40,11 +44,11 @@ export default function GivePage() {
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-gold">
               Bank Transfer
             </p>
-            <p className="mt-6 text-lg text-white/80">{CHURCH_INFO.bankName}</p>
+            <p className="mt-6 text-lg text-white/80">{churchInfo.bankName}</p>
             <p className="font-display mt-3 text-5xl font-medium tracking-wide text-brand-gold sm:text-6xl">
-              {CHURCH_INFO.bankAccount}
+              {churchInfo.bankAccount}
             </p>
-            <p className="mt-4 text-sm text-white/60">{CHURCH_INFO.name}</p>
+            <p className="mt-4 text-sm text-white/60">{churchInfo.name}</p>
           </div>
 
           {/* Other methods */}

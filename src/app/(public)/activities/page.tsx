@@ -9,7 +9,11 @@ export const metadata: Metadata = {
   description: `Weekly programs and activities at ${CHURCH_INFO.name}.`,
 };
 
-export default function ActivitiesPage() {
+import { getChurchInfo } from "@/lib/settings";
+
+export default async function ActivitiesPage() {
+  const churchInfo = await getChurchInfo();
+
   return (
     <>
       <PageHero
@@ -49,7 +53,7 @@ export default function ActivitiesPage() {
             <MapPin className="size-5 shrink-0 text-gold-deep" />
             <p className="text-ink-soft">
               All activities hold at the church premises:{" "}
-              <span className="font-medium text-ink">{CHURCH_INFO.address}</span>
+              <span className="font-medium text-ink">{churchInfo.address}</span>
             </p>
           </Link>
         </div>

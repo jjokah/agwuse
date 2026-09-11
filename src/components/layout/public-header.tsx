@@ -17,12 +17,19 @@ import { NAV_ITEMS, CHURCH_INFO } from "@/lib/constants";
 import { MobileNav } from "./mobile-nav";
 import { useState } from "react";
 
+import type { ChurchInfo } from "@/lib/settings/schema";
+
 const triggerClass =
   "bg-transparent text-[13px] font-medium uppercase tracking-wide text-ink hover:text-gold-deep data-[state=open]:text-gold-deep";
 
-export function PublicHeader() {
+interface PublicHeaderProps {
+  churchInfo?: Partial<ChurchInfo>;
+}
+
+export function PublicHeader({ churchInfo }: PublicHeaderProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const info = { ...CHURCH_INFO, ...churchInfo };
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-cream/90 backdrop-blur supports-[backdrop-filter]:bg-cream/75">
@@ -31,16 +38,16 @@ export function PublicHeader() {
         <Link href="/" className="flex items-center gap-3">
           <Image
             src="/ag-logo.png"
-            alt={CHURCH_INFO.shortName}
+            alt={info.shortName}
             width={40}
             height={40}
           />
           <span className="hidden flex-col sm:flex">
             <span className="text-lg font-bold leading-tight text-brand-navy">
-              {CHURCH_INFO.shortName}
+              {info.shortName}
             </span>
             <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-gold-deep">
-              {CHURCH_INFO.tagline}
+              {info.tagline}
             </span>
           </span>
         </Link>
@@ -120,7 +127,7 @@ export function PublicHeader() {
       </div>
 
       {/* Mobile Navigation */}
-      <MobileNav open={mobileOpen} onOpenChange={setMobileOpen} />
+      <MobileNav open={mobileOpen} onOpenChange={setMobileOpen} churchInfo={info} />
     </header>
   );
 }

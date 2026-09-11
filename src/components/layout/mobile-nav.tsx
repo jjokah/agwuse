@@ -13,13 +13,17 @@ import { Separator } from "@/components/ui/separator";
 import { NAV_ITEMS, CHURCH_INFO } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
+import type { ChurchInfo } from "@/lib/settings/schema";
+
 interface MobileNavProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  churchInfo?: Partial<ChurchInfo>;
 }
 
-export function MobileNav({ open, onOpenChange }: MobileNavProps) {
+export function MobileNav({ open, onOpenChange, churchInfo }: MobileNavProps) {
   const pathname = usePathname();
+  const info = { ...CHURCH_INFO, ...churchInfo };
 
   const linkClass = (href: string) =>
     cn(
@@ -36,16 +40,16 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
           <div className="flex items-center gap-3">
             <Image
               src="/ag-logo.png"
-              alt={CHURCH_INFO.shortName}
+              alt={info.shortName}
               width={36}
               height={36}
             />
             <div className="flex flex-col text-left">
               <SheetTitle className="text-base font-bold text-brand-navy">
-                {CHURCH_INFO.shortName}
+                {info.shortName}
               </SheetTitle>
               <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-gold-deep">
-                {CHURCH_INFO.tagline}
+                {info.tagline}
               </span>
             </div>
           </div>
@@ -109,8 +113,8 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
             </Link>
           </div>
           <div className="text-xs leading-relaxed text-ink-soft">
-            <p>{CHURCH_INFO.address}</p>
-            <p className="mt-1">{CHURCH_INFO.phones[0]}</p>
+            <p>{info.address}</p>
+            <p className="mt-1">{info.phones[0]}</p>
           </div>
         </div>
       </SheetContent>

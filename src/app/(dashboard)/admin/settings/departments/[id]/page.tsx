@@ -4,8 +4,9 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { DepartmentForm } from "../department-form";
+import { DepartmentRoster } from "./department-roster";
 
 export const metadata: Metadata = { title: "Edit Department" };
 
@@ -19,7 +20,13 @@ export default async function EditDepartmentPage({
 
   const department = await prisma.department.findUnique({
     where: { id },
-    include: { leader: { select: { firstName: true, lastName: true } } },
+    include: {
+      leader: { select: { firstName: true, lastName: true } },
+      members: {
+        select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+      },
+    },
   });
 
   if (!department) notFound();
@@ -37,12 +44,25 @@ export default async function EditDepartmentPage({
         <ArrowLeft className="size-4" />
         Back to Departments
       </Link>
+
       <Card>
         <CardHeader>
           <CardTitle>Edit Department</CardTitle>
         </CardHeader>
         <CardContent>
           <DepartmentForm department={department} leaderName={leaderName} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Department Roster</CardTitle>
+          <CardDescription>
+            Manage members assigned to this department ({department.members.length} members).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DepartmentRoster departmentId={department.id} members={department.members} />
         </CardContent>
       </Card>
     </div>

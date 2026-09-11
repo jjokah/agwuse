@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Users } from "lucide-react";
+import { DeleteDepartmentButton } from "./delete-department-button";
 import type { DepartmentCategory, Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
@@ -46,7 +47,10 @@ export default async function DepartmentsSettingsPage({
   const [departments, total] = await Promise.all([
     prisma.department.findMany({
       where,
-      include: { leader: { select: { firstName: true, lastName: true } } },
+      include: {
+        leader: { select: { firstName: true, lastName: true } },
+        _count: { select: { members: true } },
+      },
       orderBy: [{ category: "asc" }, { name: "asc" }],
       skip,
       take,
@@ -105,6 +109,7 @@ export default async function DepartmentsSettingsPage({
                   <TableHead>Name</TableHead>
                   <TableHead>Category</TableHead>
                   <TableHead>Leader</TableHead>
+                  <TableHead>Members</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -121,18 +126,26 @@ export default async function DepartmentsSettingsPage({
                         ? `${dept.leader.firstName} ${dept.leader.lastName}`
                         : "—"}
                     </TableCell>
+                    <TableCell>{dept._count.members}</TableCell>
                     <TableCell>
                       <Badge variant={dept.isActive ? "default" : "secondary"}>
                         {dept.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Link
-                        href={`/admin/settings/departments/${dept.id}`}
-                        className="text-sm text-brand-gold-dark hover:underline"
-                      >
-                        Edit
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <Link
+                          href={`/admin/settings/departments/${dept.id}`}
+                          className="text-sm text-brand-gold-dark hover:underline font-medium"
+                        >
+                          Edit
+                        </Link>
+                        <DeleteDepartmentButton
+                          id={dept.id}
+                          name={dept.name}
+                          memberCount={dept._count.members}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -51,6 +51,7 @@ export async function getFinanceReportData(
       gte: fromDate,
       lte: toDate,
     },
+    voidedAt: null,
   };
 
   const [

@@ -455,6 +455,7 @@ export async function createDepartment(formData: FormData) {
 
     revalidatePath("/admin/settings/departments");
     revalidatePath("/departments");
+    revalidatePath("/leaders");
     return { success: true };
   } catch (err) {
     console.error("createDepartment error:", err);
@@ -470,6 +471,7 @@ export async function updateDepartment(id: string, formData: FormData) {
     description: (formData.get("description") as string) || undefined,
     category: formData.get("category") as string,
     leaderId: (formData.get("leaderId") as string) || undefined,
+    isActive: formData.get("isActive") !== "false",
   };
 
   const parsed = departmentSchema.safeParse(raw);
@@ -487,11 +489,13 @@ export async function updateDepartment(id: string, formData: FormData) {
         description: data.description ? sanitizeHtml(data.description) : null,
         category: data.category as "MINISTRY" | "COMMITTEE" | "CHOIR" | "OUTREACH",
         leaderId: data.leaderId || null,
+        isActive: data.isActive ?? true,
       },
     });
 
     revalidatePath("/admin/settings/departments");
     revalidatePath("/departments");
+    revalidatePath("/leaders");
     return { success: true };
   } catch (err) {
     console.error("updateDepartment error:", err);
@@ -502,9 +506,18 @@ export async function updateDepartment(id: string, formData: FormData) {
 export async function deleteDepartment(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    await prisma.department.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      // Nullify departmentId for any members assigned to this department
+      await tx.user.updateMany({
+        where: { departmentId: id },
+        data: { departmentId: null },
+      });
+      await tx.department.delete({ where: { id } });
+    });
+
     revalidatePath("/admin/settings/departments");
     revalidatePath("/departments");
+    revalidatePath("/leaders");
     return { success: true };
   } catch (err) {
     console.error("deleteDepartment error:", err);

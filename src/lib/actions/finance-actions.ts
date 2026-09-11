@@ -5,7 +5,9 @@ import { OfferingCategory } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { transactionSchema, pledgeSchema } from "@/lib/validations/finance";
 import { recordTransaction } from "@/lib/finance/record-transaction";
+import { auditLog } from "@/lib/actions/admin-actions";
 import { revalidatePath } from "next/cache";
+import type { ActionResult } from "@/lib/action-result";
 
 export async function createTransaction(formData: FormData) {
   const session = await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
@@ -59,6 +61,7 @@ export async function createTransaction(formData: FormData) {
     });
 
     revalidatePath("/admin/finance");
+    revalidatePath("/admin/finance/transactions");
     revalidatePath("/finance");
     revalidatePath("/my-giving");
 
@@ -69,14 +72,14 @@ export async function createTransaction(formData: FormData) {
   }
 }
 
-export async function createPledge(formData: FormData) {
-  await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
+export async function createPledge(formData: FormData): Promise<ActionResult<{ id: string }>> {
+  const session = await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
 
   const raw = {
     title: formData.get("title") as string,
     amount: formData.get("amount") as string,
     startDate: formData.get("startDate") as string,
-    endDate: formData.get("endDate") as string,
+    endDate: (formData.get("endDate") as string) || null,
     memberId: formData.get("memberId") as string,
   };
 
@@ -88,23 +91,111 @@ export async function createPledge(formData: FormData) {
   const data = parsed.data;
 
   try {
-    await prisma.pledge.create({
+    const pledge = await prisma.pledge.create({
       data: {
         title: data.title,
         amount: data.amount,
         amountPaid: 0,
-        startDate: new Date(data.startDate),
-        endDate: data.endDate ? new Date(data.endDate) : null,
+        startDate: data.startDate,
+        endDate: data.endDate || null,
         status: "ACTIVE",
         memberId: data.memberId,
       },
     });
 
-    revalidatePath("/admin/finance/pledges");
+    await auditLog({
+      action: "CREATE_PLEDGE",
+      entity: "Pledge",
+      entityId: pledge.id,
+      userId: session.user.id,
+      details: {
+        title: data.title,
+        amount: data.amount.toString(),
+        memberId: data.memberId,
+      },
+    });
 
-    return { success: true };
+    revalidatePath("/admin/finance/pledges");
+    revalidatePath("/finance/pledges");
+    revalidatePath("/my-giving");
+
+    return { success: true, data: { id: pledge.id } };
   } catch (err) {
     console.error("createPledge error:", err);
     return { success: false, error: "Failed to create pledge. Please try again." };
   }
+}
+
+export async function cancelPledge(pledgeId: string): Promise<ActionResult<void>> {
+  const session = await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
+
+  try {
+    const pledge = await prisma.pledge.findUnique({
+      where: { id: pledgeId },
+      select: { id: true, status: true, title: true, memberId: true },
+    });
+
+    if (!pledge) {
+      return { success: false, error: "Pledge not found" };
+    }
+
+    if (pledge.status !== "ACTIVE") {
+      return { success: false, error: `Cannot cancel a pledge that is ${pledge.status.toLowerCase()}` };
+    }
+
+    await prisma.pledge.update({
+      where: { id: pledgeId },
+      data: { status: "CANCELLED" },
+    });
+
+    await auditLog({
+      action: "CANCEL_PLEDGE",
+      entity: "Pledge",
+      entityId: pledgeId,
+      userId: session.user.id,
+      details: {
+        title: pledge.title,
+        memberId: pledge.memberId,
+      },
+    });
+
+    revalidatePath("/admin/finance/pledges");
+    revalidatePath(`/admin/finance/pledges/${pledgeId}`);
+    revalidatePath("/finance/pledges");
+    revalidatePath(`/finance/pledges/${pledgeId}`);
+    revalidatePath("/my-giving");
+
+    return { success: true };
+  } catch (err) {
+    console.error("cancelPledge error:", err);
+    return { success: false, error: "Failed to cancel pledge. Please try again." };
+  }
+}
+
+export async function getMemberActivePledges(memberId: string) {
+  await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
+
+  if (!memberId) return [];
+
+  const pledges = await prisma.pledge.findMany({
+    where: {
+      memberId,
+      status: "ACTIVE",
+    },
+    select: {
+      id: true,
+      title: true,
+      amount: true,
+      amountPaid: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return pledges.map((p) => ({
+    id: p.id,
+    title: p.title,
+    amount: Number(p.amount),
+    amountPaid: Number(p.amountPaid),
+    remaining: Math.max(0, Number(p.amount) - Number(p.amountPaid)),
+  }));
 }

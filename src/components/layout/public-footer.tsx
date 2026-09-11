@@ -10,15 +10,22 @@ function ColumnHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function PublicFooter() {
-  const sunday = WEEKLY_ACTIVITIES[0];
+import type { ChurchInfo } from "@/lib/settings/schema";
+
+interface PublicFooterProps {
+  churchInfo?: Partial<ChurchInfo>;
+}
+
+export function PublicFooter({ churchInfo }: PublicFooterProps) {
+  const info = { ...CHURCH_INFO, ...churchInfo };
+  const sunday = info.service_times?.[0] || `${WEEKLY_ACTIVITIES[0].day} ${WEEKLY_ACTIVITIES[0].time}`;
 
   return (
     <footer className="mt-auto bg-brand-navy px-4 pb-10 text-white/70">
       {/* Pre-footer invitation */}
       <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-6 border-b border-white/10 py-14 sm:flex-row sm:items-center">
         <p className="font-display max-w-xl text-2xl font-medium tracking-tight text-white sm:text-3xl">
-          Join us this Sunday at {sunday.time}.
+          Join us this Sunday: {sunday}.
           <span className="text-brand-gold-light"> You are welcome home.</span>
         </p>
         <Link
@@ -35,17 +42,17 @@ export function PublicFooter() {
           <div className="mb-4 flex items-center gap-3">
             <Image
               src="/ag-logo.png"
-              alt={CHURCH_INFO.shortName}
+              alt={info.shortName}
               width={40}
               height={40}
             />
-            <span className="font-bold text-white">{CHURCH_INFO.shortName}</span>
+            <span className="font-bold text-white">{info.shortName}</span>
           </div>
           <p className="font-display text-sm italic text-brand-gold-light">
-            {CHURCH_INFO.tagline}
+            {info.tagline}
           </p>
           <ul className="mt-4 space-y-1 text-sm">
-            {CHURCH_INFO.facebook.map((page) => (
+            {info.facebook.map((page) => (
               <li key={page}>{page}</li>
             ))}
           </ul>
@@ -61,23 +68,8 @@ export function PublicFooter() {
               </Link>
             </li>
             <li>
-              <Link href="/leaders" className="transition-colors hover:text-brand-gold">
-                Leaders
-              </Link>
-            </li>
-            <li>
-              <Link href="/departments" className="transition-colors hover:text-brand-gold">
-                Departments
-              </Link>
-            </li>
-            <li>
               <Link href="/sermons" className="transition-colors hover:text-brand-gold">
                 Sermons
-              </Link>
-            </li>
-            <li>
-              <Link href="/blog" className="transition-colors hover:text-brand-gold">
-                Blog
               </Link>
             </li>
             <li>
@@ -86,8 +78,18 @@ export function PublicFooter() {
               </Link>
             </li>
             <li>
+              <Link href="/departments" className="transition-colors hover:text-brand-gold">
+                Departments
+              </Link>
+            </li>
+            <li>
+              <Link href="/give" className="transition-colors hover:text-brand-gold">
+                Give Online
+              </Link>
+            </li>
+            <li>
               <Link href="/contact" className="transition-colors hover:text-brand-gold">
-                Contact
+                Contact &amp; Visit
               </Link>
             </li>
           </ul>
@@ -97,16 +99,16 @@ export function PublicFooter() {
         <div>
           <ColumnHeading>Contact</ColumnHeading>
           <ul className="space-y-2.5 text-sm">
-            <li>{CHURCH_INFO.address}</li>
-            {CHURCH_INFO.phones.map((phone) => (
+            <li>{info.address}</li>
+            {info.phones.map((phone) => (
               <li key={phone}>{phone}</li>
             ))}
             <li>
               <a
-                href={`mailto:${CHURCH_INFO.email}`}
+                href={`mailto:${info.email}`}
                 className="transition-colors hover:text-brand-gold"
               >
-                {CHURCH_INFO.email}
+                {info.email}
               </a>
             </li>
           </ul>
@@ -116,9 +118,9 @@ export function PublicFooter() {
         <div>
           <ColumnHeading>Give</ColumnHeading>
           <ul className="space-y-2.5 text-sm">
-            <li>{CHURCH_INFO.bankName}</li>
+            <li>{info.bankName}</li>
             <li className="font-mono text-lg text-brand-gold">
-              {CHURCH_INFO.bankAccount}
+              {info.bankAccount}
             </li>
             <li>
               <Link href="/give" className="transition-colors hover:text-brand-gold">
@@ -133,7 +135,7 @@ export function PublicFooter() {
       <div className="mx-auto max-w-7xl border-t border-white/10 pt-6">
         <div className="flex flex-col items-center justify-between gap-4 text-center text-sm sm:flex-row">
           <p>
-            &copy; {new Date().getFullYear()} {CHURCH_INFO.name}. All rights
+            &copy; {new Date().getFullYear()} {info.name}. All rights
             reserved.
           </p>
           <div className="flex gap-4">

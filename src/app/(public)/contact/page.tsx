@@ -9,7 +9,11 @@ export const metadata: Metadata = {
   description: `Get in touch with ${CHURCH_INFO.name}. Visit us, call, or send us a message.`,
 };
 
-export default function ContactPage() {
+import { getChurchInfo } from "@/lib/settings";
+
+export default async function ContactPage() {
+  const churchInfo = await getChurchInfo();
+
   return (
     <>
       <PageHero
@@ -29,7 +33,7 @@ export default function ContactPage() {
                     <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-deep">
                       Our Location
                     </h3>
-                    <p className="mt-1.5 text-ink">{CHURCH_INFO.address}</p>
+                    <p className="mt-1.5 text-ink">{churchInfo.address}</p>
                   </div>
                 </div>
                 <div className="flex gap-4">
@@ -39,7 +43,7 @@ export default function ContactPage() {
                       Phone
                     </h3>
                     <div className="mt-1.5 space-y-1 text-ink">
-                      {CHURCH_INFO.phones.map((phone) => (
+                      {churchInfo.phones.map((phone) => (
                         <p key={phone}>{phone}</p>
                       ))}
                     </div>
@@ -52,10 +56,10 @@ export default function ContactPage() {
                       Email
                     </h3>
                     <a
-                      href={`mailto:${CHURCH_INFO.email}`}
+                      href={`mailto:${churchInfo.email}`}
                       className="mt-1.5 inline-block text-ink transition-colors hover:text-gold-deep"
                     >
-                      {CHURCH_INFO.email}
+                      {churchInfo.email}
                     </a>
                   </div>
                 </div>

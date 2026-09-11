@@ -33,22 +33,22 @@ export default async function AdminFinancePage() {
     recentTransactions,
   ] = await Promise.all([
     prisma.financialTransaction.aggregate({
-      where: { type: { not: "EXPENSE" }, date: { gte: startOfYear } },
+      where: { type: { not: "EXPENSE" }, date: { gte: startOfYear }, voidedAt: null },
       _sum: { amount: true },
     }),
     prisma.financialTransaction.aggregate({
-      where: { type: "EXPENSE", date: { gte: startOfYear } },
+      where: { type: "EXPENSE", date: { gte: startOfYear }, voidedAt: null },
       _sum: { amount: true },
     }),
     prisma.financialTransaction.aggregate({
-      where: { type: { not: "EXPENSE" }, date: { gte: startOfMonth } },
+      where: { type: { not: "EXPENSE" }, date: { gte: startOfMonth }, voidedAt: null },
       _sum: { amount: true },
     }),
     prisma.financialTransaction.aggregate({
-      where: { type: "EXPENSE", date: { gte: startOfMonth } },
+      where: { type: "EXPENSE", date: { gte: startOfMonth }, voidedAt: null },
       _sum: { amount: true },
     }),
-    prisma.financialTransaction.count(),
+    prisma.financialTransaction.count({ where: { voidedAt: null } }),
     prisma.financialTransaction.findMany({
       orderBy: { createdAt: "desc" },
       take: 10,

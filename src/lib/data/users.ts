@@ -18,12 +18,12 @@ export const getUserById = cache(async (id: string) => {
 export const getUserGivingSummary = cache(async (userId: string) => {
   const [transactions, givingTotal] = await Promise.all([
     prisma.financialTransaction.findMany({
-      where: { memberId: userId, type: { not: "EXPENSE" } },
+      where: { memberId: userId, type: { not: "EXPENSE" }, voidedAt: null },
       orderBy: { date: "desc" },
       take: 10,
     }),
     prisma.financialTransaction.aggregate({
-      where: { memberId: userId, type: { not: "EXPENSE" } },
+      where: { memberId: userId, type: { not: "EXPENSE" }, voidedAt: null },
       _sum: { amount: true },
     }),
   ]);

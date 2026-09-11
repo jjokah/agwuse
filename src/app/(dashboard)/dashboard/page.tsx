@@ -31,11 +31,11 @@ export default async function DashboardPage() {
     announcements,
   ] = await Promise.all([
     prisma.financialTransaction.aggregate({
-      where: { memberId: userId, type: { not: "EXPENSE" } },
+      where: { memberId: userId, type: { not: "EXPENSE" }, voidedAt: null },
       _sum: { amount: true },
     }),
     prisma.financialTransaction.findMany({
-      where: { memberId: userId, type: { not: "EXPENSE" } },
+      where: { memberId: userId, type: { not: "EXPENSE" }, voidedAt: null },
       orderBy: { date: "desc" },
       take: 5,
     }),

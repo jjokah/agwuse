@@ -24,6 +24,7 @@ interface DepartmentFormProps {
     description: string | null;
     category: string;
     leaderId: string | null;
+    isActive?: boolean;
   };
   leaderName?: string;
   members?: { id: string; firstName: string; lastName: string }[];
@@ -116,6 +117,22 @@ export function DepartmentForm({ department, leaderName }: DepartmentFormProps) 
           defaultValue={department?.description || ""}
         />
       </div>
+
+      {department && (
+        <div className="flex items-center gap-2 rounded-lg border p-3">
+          <input
+            type="checkbox"
+            id="isActive"
+            name="isActive"
+            value="true"
+            defaultChecked={department.isActive !== false}
+            className="size-4 rounded border-gray-300 text-brand-gold focus:ring-brand-gold"
+          />
+          <Label htmlFor="isActive" className="cursor-pointer font-normal">
+            Department is active and visible to church members
+          </Label>
+        </div>
+      )}
 
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "Saving..." : department ? "Update Department" : "Create Department"}

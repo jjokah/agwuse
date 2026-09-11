@@ -28,7 +28,7 @@ export default async function AdminUserDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   const { id } = await params;
 
   const [user, { transactions, totalGiving }] = await Promise.all([
@@ -73,7 +73,13 @@ export default async function AdminUserDetailPage({
           </div>
         </div>
 
-        <UserActions userId={user.id} currentRole={user.role} currentStatus={user.status} />
+        <UserActions
+          userId={user.id}
+          currentRole={user.role}
+          currentStatus={user.status}
+          actorId={session.user.id}
+          actorRole={session.user.role}
+        />
       </div>
 
       {/* Personal Details */}

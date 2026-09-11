@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -15,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
-import { HandCoins } from "lucide-react";
+import { HandCoins, PlusCircle } from "lucide-react";
 import type { PledgeStatus, Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
@@ -62,9 +63,20 @@ export default async function PledgesPage({
     CANCELLED: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400",
   };
 
+  const now = new Date();
+
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Pledges</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold">Pledges</h1>
+        <Link
+          href="/admin/finance/pledges/new"
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          <PlusCircle className="size-4" />
+          New Pledge
+        </Link>
+      </div>
 
       {/* Filters */}
       <form className="flex items-center gap-3">
@@ -96,6 +108,7 @@ export default async function PledgesPage({
                   <TableHead>Progress</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Due Date</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -110,10 +123,21 @@ export default async function PledgesPage({
                         )
                       : 0;
 
+                  const isOverdue =
+                    pledge.status === "ACTIVE" &&
+                    pledge.endDate &&
+                    new Date(pledge.endDate) < now;
+                  const displayStatus = isOverdue ? "OVERDUE" : pledge.status;
+
                   return (
                     <TableRow key={pledge.id}>
                       <TableCell className="font-medium">
-                        {pledge.title}
+                        <Link
+                          href={`/admin/finance/pledges/${pledge.id}`}
+                          className="hover:underline font-semibold text-foreground"
+                        >
+                          {pledge.title}
+                        </Link>
                       </TableCell>
                       <TableCell>
                         {pledge.member.firstName} {pledge.member.lastName}
@@ -137,14 +161,22 @@ export default async function PledgesPage({
                       </TableCell>
                       <TableCell>
                         <Badge
-                          className={statusColor[pledge.status] || ""}
+                          className={statusColor[displayStatus] || ""}
                           variant="outline"
                         >
-                          {pledge.status}
+                          {displayStatus}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         {pledge.endDate ? formatDate(pledge.endDate) : "No due date"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Link
+                          href={`/admin/finance/pledges/${pledge.id}`}
+                          className="text-xs text-brand-gold-dark hover:underline font-medium"
+                        >
+                          View Details
+                        </Link>
                       </TableCell>
                     </TableRow>
                   );
