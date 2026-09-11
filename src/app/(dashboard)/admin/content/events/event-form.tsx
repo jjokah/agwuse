@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createEvent, updateEvent } from "@/lib/actions/content-actions";
+import { ImageUpload } from "@/components/shared/image-upload";
 import { toast } from "sonner";
 
 interface EventFormProps {
@@ -139,12 +140,13 @@ export function EventForm({ event }: EventFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="imageUrl">Image URL (optional)</Label>
-        <Input
-          id="imageUrl"
+        <Label htmlFor="imageUrl">Event Banner Image (optional)</Label>
+        <ImageUpload
           name="imageUrl"
-          defaultValue={event?.imageUrl || ""}
-          placeholder="https://..."
+          defaultValue={event?.imageUrl}
+          folder="events"
+          label="Upload Event Banner"
+          aspectRatio="wide"
         />
       </div>
 

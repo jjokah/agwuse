@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { updateProfileSchema, changePasswordSchema } from "@/lib/validations/user";
 import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
+import { after } from "next/server";
+import { deleteOwnedBlobs } from "@/lib/uploads/cleanup";
 
 export async function updateProfile(formData: FormData) {
   const session = await auth();
@@ -21,6 +23,8 @@ export async function updateProfile(formData: FormData) {
     maritalStatus: (formData.get("maritalStatus") as string) || undefined,
   };
 
+  const image = (formData.get("image") as string) || (formData.get("profilePhoto") as string) || undefined;
+
   const parsed = updateProfileSchema.safeParse(raw);
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0].message };
@@ -29,6 +33,18 @@ export async function updateProfile(formData: FormData) {
   const { firstName, lastName, phone, address, occupation, dateOfBirth, gender, maritalStatus } = parsed.data;
 
   try {
+    const existing = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { image: true, profilePhoto: true },
+    });
+
+    const oldImage = existing?.image || existing?.profilePhoto;
+    if (oldImage && image && oldImage !== image) {
+      after(async () => {
+        await deleteOwnedBlobs([oldImage]);
+      });
+    }
+
     await prisma.user.update({
       where: { id: session.user.id },
       data: {
@@ -41,6 +57,8 @@ export async function updateProfile(formData: FormData) {
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         gender: (gender as "MALE" | "FEMALE") || null,
         maritalStatus: (maritalStatus as "SINGLE" | "MARRIED" | "WIDOWED" | "DIVORCED") || null,
+        image: image || existing?.image || null,
+        profilePhoto: image || existing?.profilePhoto || null,
       },
     });
 

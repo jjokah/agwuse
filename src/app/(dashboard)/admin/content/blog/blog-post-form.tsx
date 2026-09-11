@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import dynamic from "next/dynamic";
 import { createBlogPost, updateBlogPost } from "@/lib/actions/content-actions";
+import { ImageUpload } from "@/components/shared/image-upload";
 import { toast } from "sonner";
 
 const RichTextEditor = dynamic(
@@ -96,12 +97,13 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="featuredImage">Featured Image URL</Label>
-          <Input
-            id="featuredImage"
+          <Label htmlFor="featuredImage">Featured Image</Label>
+          <ImageUpload
             name="featuredImage"
-            defaultValue={post?.featuredImage || ""}
-            placeholder="https://..."
+            defaultValue={post?.featuredImage}
+            folder="blog"
+            label="Upload Featured Image"
+            aspectRatio="wide"
           />
         </div>
       </div>

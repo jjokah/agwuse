@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createSermon, updateSermon } from "@/lib/actions/content-actions";
+import { ImageUpload } from "@/components/shared/image-upload";
 import { toast } from "sonner";
 
 interface SermonFormProps {
@@ -79,10 +80,16 @@ export function SermonForm({ sermon }: SermonFormProps) {
         <Textarea id="description" name="description" rows={3} defaultValue={sermon?.description || ""} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="audioUrl">Audio URL (optional)</Label>
-          <Input id="audioUrl" name="audioUrl" defaultValue={sermon?.audioUrl || ""} placeholder="https://..." />
+          <Label htmlFor="audioUrl">Sermon Audio (optional)</Label>
+          <ImageUpload
+            name="audioUrl"
+            defaultValue={sermon?.audioUrl}
+            folder="sermons"
+            label="Upload Sermon Audio (MP3 / WAV / M4A)"
+            aspectRatio="wide"
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="videoUrl">Video URL (optional)</Label>

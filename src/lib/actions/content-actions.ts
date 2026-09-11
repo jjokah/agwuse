@@ -11,7 +11,9 @@ import {
 } from "@/lib/validations/content";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { revalidateBlogPost, revalidateEvent, revalidateSermon } from "@/lib/revalidate";
+import { deleteOwnedBlobs } from "@/lib/uploads/cleanup";
 
 // ============================================================
 // BLOG POSTS
@@ -101,6 +103,14 @@ export async function updateBlogPost(id: string, formData: FormData) {
       return { success: false, error: "Post not found" };
     }
 
+    const newImage = data.featuredImage || null;
+    if (existing.featuredImage && existing.featuredImage !== newImage) {
+      const oldImage = existing.featuredImage;
+      after(async () => {
+        await deleteOwnedBlobs([oldImage]);
+      });
+    }
+
     await prisma.blogPost.update({
       where: { id },
       data: {
@@ -108,7 +118,7 @@ export async function updateBlogPost(id: string, formData: FormData) {
         content: sanitizeHtml(data.content),
         excerpt: data.excerpt ? sanitizeHtml(data.excerpt) : null,
         type: data.type as "BLOG" | "ANNOUNCEMENT" | "NEWS",
-        featuredImage: data.featuredImage || null,
+        featuredImage: newImage,
         published: isPublished,
         publishedAt: isPublished && !existing.publishedAt ? new Date() : existing.publishedAt,
       },
@@ -125,7 +135,12 @@ export async function updateBlogPost(id: string, formData: FormData) {
 export async function deleteBlogPost(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    await prisma.blogPost.delete({ where: { id } });
+    const deleted = await prisma.blogPost.delete({ where: { id } });
+    if (deleted.featuredImage) {
+      after(async () => {
+        await deleteOwnedBlobs([deleted.featuredImage]);
+      });
+    }
     revalidateBlogPost("");
     return { success: true };
   } catch (err) {
@@ -204,6 +219,19 @@ export async function updateEvent(id: string, formData: FormData) {
   const data = parsed.data;
 
   try {
+    const existing = await prisma.event.findUnique({ where: { id } });
+    if (!existing) {
+      return { success: false, error: "Event not found" };
+    }
+
+    const newImage = data.imageUrl || null;
+    if (existing.imageUrl && existing.imageUrl !== newImage) {
+      const oldImage = existing.imageUrl;
+      after(async () => {
+        await deleteOwnedBlobs([oldImage]);
+      });
+    }
+
     await prisma.event.update({
       where: { id },
       data: {
@@ -213,7 +241,7 @@ export async function updateEvent(id: string, formData: FormData) {
         endDate: data.endDate ? new Date(data.endDate) : null,
         location: data.location || "AG Wuse, 53 Accra Street, Wuse Zone 5",
         type: data.type as "SERVICE" | "REVIVAL" | "CONFERENCE" | "OUTREACH" | "HARVEST" | "OTHER",
-        imageUrl: data.imageUrl || null,
+        imageUrl: newImage,
         isPublished: data.isPublished === "on",
       },
     });
@@ -229,7 +257,12 @@ export async function updateEvent(id: string, formData: FormData) {
 export async function deleteEvent(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    await prisma.event.delete({ where: { id } });
+    const deleted = await prisma.event.delete({ where: { id } });
+    if (deleted.imageUrl) {
+      after(async () => {
+        await deleteOwnedBlobs([deleted.imageUrl]);
+      });
+    }
     revalidateEvent(id);
     return { success: true };
   } catch (err) {
@@ -278,7 +311,12 @@ export async function createGalleryImage(formData: FormData) {
 export async function deleteGalleryImage(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    await prisma.galleryImage.delete({ where: { id } });
+    const deleted = await prisma.galleryImage.delete({ where: { id } });
+    if (deleted.url) {
+      after(async () => {
+        await deleteOwnedBlobs([deleted.url, deleted.thumbnailUrl]);
+      });
+    }
     revalidatePath("/admin/content/gallery");
     revalidatePath("/gallery");
     return { success: true };
@@ -354,6 +392,19 @@ export async function updateSermon(id: string, formData: FormData) {
   const data = parsed.data;
 
   try {
+    const existing = await prisma.sermon.findUnique({ where: { id } });
+    if (!existing) {
+      return { success: false, error: "Sermon not found" };
+    }
+
+    const newAudio = data.audioUrl || null;
+    if (existing.audioUrl && existing.audioUrl !== newAudio) {
+      const oldAudio = existing.audioUrl;
+      after(async () => {
+        await deleteOwnedBlobs([oldAudio]);
+      });
+    }
+
     await prisma.sermon.update({
       where: { id },
       data: {
@@ -361,7 +412,7 @@ export async function updateSermon(id: string, formData: FormData) {
         speaker: data.speaker.trim(),
         description: data.description ? sanitizeHtml(data.description) : null,
         date: new Date(data.date),
-        audioUrl: data.audioUrl || null,
+        audioUrl: newAudio,
         videoUrl: data.videoUrl || null,
         seriesName: data.seriesName ? data.seriesName.trim() : null,
       },
@@ -378,7 +429,12 @@ export async function updateSermon(id: string, formData: FormData) {
 export async function deleteSermon(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    await prisma.sermon.delete({ where: { id } });
+    const deleted = await prisma.sermon.delete({ where: { id } });
+    if (deleted.audioUrl) {
+      after(async () => {
+        await deleteOwnedBlobs([deleted.audioUrl]);
+      });
+    }
     revalidateSermon();
     return { success: true };
   } catch (err) {

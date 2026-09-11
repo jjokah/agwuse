@@ -31,6 +31,8 @@ export default async function ProfilePage() {
       role: true,
       status: true,
       memberSince: true,
+      image: true,
+      profilePhoto: true,
       department: { select: { name: true } },
     },
   });

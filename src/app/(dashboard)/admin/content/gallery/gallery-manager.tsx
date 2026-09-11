@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { createGalleryImage, deleteGalleryImage } from "@/lib/actions/content-actions";
+import { ImageUpload } from "@/components/shared/image-upload";
 import { toast } from "sonner";
 import { PlusCircle, Trash2 } from "lucide-react";
 
@@ -65,34 +66,42 @@ export function GalleryManager({ images, albums }: GalleryManagerProps) {
           <CardTitle className="text-base">Add Image</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={handleUpload} className="flex flex-wrap items-end gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="url" className="text-xs">Image URL</Label>
-              <Input id="url" name="url" required placeholder="https://..." className="w-64" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="caption" className="text-xs">Caption</Label>
-              <Input id="caption" name="caption" placeholder="Optional caption" className="w-48" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="albumName" className="text-xs">Album</Label>
-              <Input
-                id="albumName"
-                name="albumName"
-                placeholder="Album name"
-                list="album-suggestions"
-                className="w-40"
+          <form action={handleUpload} className="space-y-4">
+            <div className="max-w-md">
+              <Label className="mb-1.5 block text-xs font-medium">Upload Photo (or enter URL) *</Label>
+              <ImageUpload
+                name="url"
+                folder="gallery"
+                label="Select or drop gallery photo"
+                aspectRatio="wide"
               />
-              <datalist id="album-suggestions">
-                {albums.map((a) => (
-                  <option key={a} value={a} />
-                ))}
-              </datalist>
             </div>
-            <Button type="submit" size="sm" disabled={loading}>
-              <PlusCircle className="mr-1 size-4" />
-              {loading ? "Adding..." : "Add"}
-            </Button>
+
+            <div className="flex flex-wrap items-end gap-3 pt-2">
+              <div className="space-y-1">
+                <Label htmlFor="caption" className="text-xs">Caption (optional)</Label>
+                <Input id="caption" name="caption" placeholder="Optional caption" className="w-64" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="albumName" className="text-xs">Album (optional)</Label>
+                <Input
+                  id="albumName"
+                  name="albumName"
+                  placeholder="e.g. Sunday Service"
+                  list="album-suggestions"
+                  className="w-48"
+                />
+                <datalist id="album-suggestions">
+                  {albums.map((a) => (
+                    <option key={a} value={a} />
+                  ))}
+                </datalist>
+              </div>
+              <Button type="submit" size="sm" disabled={loading}>
+                <PlusCircle className="mr-1 size-4" />
+                {loading ? "Adding..." : "Add to Gallery"}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

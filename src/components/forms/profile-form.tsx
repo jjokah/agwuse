@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateProfile } from "@/lib/actions/user-actions";
+import { ImageUpload } from "@/components/shared/image-upload";
 import { toast } from "sonner";
 
 interface ProfileFormProps {
@@ -19,6 +20,8 @@ interface ProfileFormProps {
     dateOfBirth: Date | null;
     gender: string | null;
     maritalStatus: string | null;
+    image?: string | null;
+    profilePhoto?: string | null;
   };
 }
 
@@ -43,6 +46,17 @@ export function ProfileForm({ user }: ProfileFormProps) {
 
   return (
     <form action={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label>Profile Picture</Label>
+        <ImageUpload
+          name="image"
+          defaultValue={user.image || user.profilePhoto}
+          folder="avatars"
+          label="Upload Profile Photo"
+          aspectRatio="square"
+        />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="firstName">First Name</Label>
