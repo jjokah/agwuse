@@ -170,7 +170,7 @@ cd agwuse
 ### 2. Install dependencies
 
 ```bash
-npm install
+npm ci
 ```
 
 ### 3. Set up environment variables
@@ -202,12 +202,17 @@ This starts PostgreSQL 17 on port **5433** with:
 ### 5. Run database migrations and seed
 
 ```bash
-npm run db:migrate
+# PowerShell: choose credentials before the first seed
+$env:SEED_ADMIN_EMAIL="admin@agwuse.org"
+$env:SEED_ADMIN_PASSWORD="choose-a-strong-development-password"
+
+npm run db:deploy
 npm run db:seed
 ```
 
 The seed creates:
-- Super admin account (`admin@agwuse.org` / `Admin@2026!`)
+- A super admin account using `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. In
+  development, a random password is printed if `SEED_ADMIN_PASSWORD` is unset.
 - 23 church departments
 - Default financial categories
 - Church settings (name, address, phones, bank details)
@@ -231,14 +236,15 @@ Log in at [http://localhost:3000/login](http://localhost:3000/login) with the su
 | `DATABASE_URL` | PostgreSQL connection string | Yes |
 | `DIRECT_DATABASE_URL` | Direct PostgreSQL connection (bypasses pooler) | Yes |
 | `AUTH_SECRET` | NextAuth secret key (generate with `openssl rand -base64 32`) | Yes |
+| `NEXTAUTH_SECRET` | Compatibility value used by current environment validation; set equal to `AUTH_SECRET` | Yes |
 | `AUTH_URL` | App base URL (`http://localhost:3000` for dev) | Yes |
 | `NEXT_PUBLIC_APP_URL` | Public app URL (same as AUTH_URL) | Yes |
-| `RESEND_API_KEY` | Resend email service API key | Yes |
-| `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | Paystack public key | For payments |
+| `EMAIL_TRANSPORT` | `log` for local development or `resend` for real delivery | No |
+| `EMAIL_FROM` | Sender identity on a verified Resend domain | For real email |
+| `RESEND_API_KEY` | Resend email service API key | For real email |
+| `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | Reserved for client-side Paystack integrations; currently unused | No |
 | `PAYSTACK_SECRET_KEY` | Paystack secret key | For payments |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | For uploads |
-| `CLOUDINARY_API_KEY` | Cloudinary API key | For uploads |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret | For uploads |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob read/write token | For uploads |
 | `UPSTASH_REDIS_REST_URL` | Upstash Redis URL | For rate limiting |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis token | For rate limiting |
 
@@ -378,7 +384,7 @@ your shell but Docker Desktop is open, restart the terminal so it picks up `PATH
 - [ ] Set `AUTH_SECRET` to a strong random value
 - [ ] Configure Resend with a verified domain
 - [ ] Set up Paystack live keys (switch from test mode)
-- [ ] Configure Cloudinary for image uploads
+- [ ] Configure Vercel Blob for image uploads
 - [ ] Set up Upstash Redis for rate limiting
 - [ ] Enable daily database backups
 - [ ] Review CSP headers in `next.config.ts`

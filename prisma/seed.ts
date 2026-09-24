@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
@@ -264,11 +265,11 @@ async function main() {
     {
       key: "service_times",
       value: JSON.stringify([
-        { day: "Sunday", activity: "Main Service / Sunday School", time: "8:00 AM" },
-        { day: "Monday", activity: "New Believers Class", time: "6:00 PM" },
-        { day: "Tuesday", activity: "Bible Study", time: "6:00 PM" },
-        { day: "Wednesday", activity: "Prayer Meeting", time: "6:00 PM" },
-        { day: "Friday", activity: "Sunday Preparatory Meeting", time: "6:00 PM" },
+        "Sunday 8:00 AM: Main Service / Sunday School",
+        "Monday 6:00 PM: New Believers Class",
+        "Tuesday 6:00 PM: Bible Study",
+        "Wednesday 6:00 PM: Prayer Meeting",
+        "Friday 6:00 PM: Sunday Preparatory Meeting",
       ]),
     },
   ];
