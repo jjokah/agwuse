@@ -41,6 +41,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  // Acknowledge events we don't process (transfers, refunds, subscriptions…) with 200
+  // before validating the charge shape; a 4xx makes Paystack retry them indefinitely.
+  const eventName =
+    bodyJson && typeof bodyJson === "object" && "event" in bodyJson
+      ? (bodyJson as { event?: unknown }).event
+      : undefined;
+  if (eventName !== "charge.success") {
+    return NextResponse.json({ message: "Event ignored" });
+  }
+
   const parsed = chargePayloadSchema.safeParse(bodyJson);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid payload shape" }, { status: 400 });
@@ -48,32 +58,28 @@ export async function POST(request: Request) {
 
   const event = parsed.data;
 
-  // Process successful charge events
-  if (event.event === "charge.success") {
-    const data = event.data;
-    const amountInNaira = Math.round(data.amount) / 100;
+  // charge.success: record the payment (idempotent)
+  const data = event.data;
+  const amountInNaira = Math.round(data.amount) / 100;
 
-    try {
-      const recordResult = await recordPaystackPayment({
-        reference: data.reference,
-        amount: amountInNaira,
-        currency: data.currency,
-        paid_at: data.paid_at,
-        customer: data.customer,
-        metadata: data.metadata,
-      });
+  try {
+    const recordResult = await recordPaystackPayment({
+      reference: data.reference,
+      amount: amountInNaira,
+      currency: data.currency,
+      paid_at: data.paid_at,
+      customer: data.customer,
+      metadata: data.metadata,
+    });
 
-      if (recordResult.status === "mismatch" || recordResult.status === "ignored") {
-        return NextResponse.json({ message: recordResult.message });
-      }
-
-      return NextResponse.json({ message: "OK", receiptNumber: recordResult.receiptNumber });
-    } catch (err: unknown) {
-      console.error("Paystack webhook error:", err);
-      // Only transient failures return 500
-      return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+    if (recordResult.status === "mismatch" || recordResult.status === "ignored") {
+      return NextResponse.json({ message: recordResult.message });
     }
-  }
 
-  return NextResponse.json({ message: "Event ignored" });
+    return NextResponse.json({ message: "OK", receiptNumber: recordResult.receiptNumber });
+  } catch (err: unknown) {
+    console.error("Paystack webhook error:", err);
+    // Only transient failures return 500
+    return NextResponse.json({ error: "Processing failed" }, { status: 500 });
+  }
 }

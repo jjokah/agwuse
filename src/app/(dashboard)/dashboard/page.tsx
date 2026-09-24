@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
+import { ALL_ROLES } from "@/lib/authz/roles";
 import { prisma } from "@/lib/prisma";
 import { StatCard } from "@/components/shared/stat-card";
 import { Calendar, Megaphone, Heart } from "lucide-react";
@@ -13,10 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default async function DashboardPage() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
+  const session = await requirePageRole(ALL_ROLES);
   const userId = session.user.id;
 
   const now = new Date();
@@ -71,7 +68,7 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">
-          Welcome, {session?.user?.name?.split(" ")[0] || "Member"}
+          Welcome, {session.user.name?.split(" ")[0] || "Member"}
         </h1>
         <p className="text-muted-foreground">
           Here&apos;s an overview of your church activities.

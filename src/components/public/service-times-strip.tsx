@@ -1,13 +1,16 @@
-import { WEEKLY_ACTIVITIES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { getChurchInfo } from "@/lib/settings";
+import { parseServiceTime } from "@/lib/settings/schema";
 
 interface ServiceTimesStripProps {
   variant?: "band" | "inline";
 }
 
-/** Weekly service times as a refined columned strip. */
-export function ServiceTimesStrip({ variant = "band" }: ServiceTimesStripProps) {
+/** Weekly service times (from church settings) as a refined columned strip. */
+export async function ServiceTimesStrip({ variant = "band" }: ServiceTimesStripProps) {
   const isBand = variant === "band";
+  const { serviceTimes } = await getChurchInfo();
+  const items = serviceTimes.map(parseServiceTime);
   return (
     <section
       className={cn(
@@ -20,9 +23,9 @@ export function ServiceTimesStrip({ variant = "band" }: ServiceTimesStripProps) 
           isBand && "mx-auto max-w-7xl"
         )}
       >
-        {WEEKLY_ACTIVITIES.map((item) => (
+        {items.map((item, index) => (
           <div
-            key={`${item.day}-${item.activity}`}
+            key={`${index}-${item.day}-${item.activity}`}
             className={cn(
               "border-l pl-4",
               isBand ? "border-white/15" : "border-border"

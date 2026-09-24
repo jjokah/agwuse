@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { getChurchInfo } from "@/lib/settings";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Settings, Users, ScrollText } from "lucide-react";
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminSettingsPage() {
-  await requireRole(["SUPER_ADMIN"]);
+  await requirePageRole(["SUPER_ADMIN"]);
   const churchInfo = await getChurchInfo();
 
   return (

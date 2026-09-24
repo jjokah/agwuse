@@ -13,6 +13,7 @@ export default function robots(): MetadataRoute.Robots {
           "/finance",
           "/profile",
           "/my-giving",
+          "/directory",
           "/api/",
         ],
       },

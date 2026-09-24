@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { PledgeDetailView } from "@/components/finance/pledge-detail-view";
 
@@ -24,7 +24,7 @@ export default async function FinancePledgeDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
   const { id } = await params;
 
   const pledge = await prisma.pledge.findUnique({

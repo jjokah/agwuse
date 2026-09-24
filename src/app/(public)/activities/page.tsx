@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Clock, MapPin } from "lucide-react";
-import { WEEKLY_ACTIVITIES, CHURCH_INFO } from "@/lib/constants";
+import { CHURCH_INFO } from "@/lib/constants";
 import { PageHero } from "@/components/public/page-hero";
+import { getChurchInfo } from "@/lib/settings";
+import { parseServiceTime } from "@/lib/settings/schema";
 
 export const metadata: Metadata = {
   title: "Weekly Activities",
   description: `Weekly programs and activities at ${CHURCH_INFO.name}.`,
 };
 
-import { getChurchInfo } from "@/lib/settings";
-
 export default async function ActivitiesPage() {
   const churchInfo = await getChurchInfo();
+  // Managed in Admin → Settings → Service Times
+  const activities = churchInfo.serviceTimes.map(parseServiceTime);
 
   return (
     <>
@@ -24,19 +26,21 @@ export default async function ActivitiesPage() {
       <div className="px-4 py-20 sm:py-24">
         <div className="mx-auto max-w-3xl">
           <div className="divide-y divide-border">
-            {WEEKLY_ACTIVITIES.map((activity) => (
+            {activities.map((activity, index) => (
               <div
-                key={activity.day}
+                key={`${index}-${activity.day}`}
                 className="flex items-center gap-6 py-6 sm:gap-8"
               >
                 <span className="font-display w-20 shrink-0 text-3xl font-medium tracking-tight text-brand-gold sm:text-4xl">
-                  {activity.day.slice(0, 3)}
+                  {activity.day ? activity.day.slice(0, 3) : "—"}
                 </span>
                 <div className="flex-1">
                   <h3 className="font-medium text-ink">{activity.activity}</h3>
-                  <p className="mt-0.5 text-sm text-ink-soft">
-                    Every {activity.day}
-                  </p>
+                  {activity.day && (
+                    <p className="mt-0.5 text-sm text-ink-soft">
+                      Every {activity.day}
+                    </p>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 text-sm font-semibold text-gold-deep">
                   <Clock className="size-4" />

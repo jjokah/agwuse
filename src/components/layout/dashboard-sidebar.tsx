@@ -16,6 +16,8 @@ import {
   FileEdit,
   Settings,
   LogOut,
+  Receipt,
+  HandCoins,
 } from "lucide-react";
 import {
   Sidebar,
@@ -31,6 +33,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { CHURCH_INFO } from "@/lib/constants";
+import { signOutAction } from "@/lib/actions/session-actions";
 
 const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   LayoutDashboard,
@@ -44,6 +47,8 @@ const ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   Wallet,
   FileEdit,
   Settings,
+  Receipt,
+  HandCoins,
 };
 
 const MEMBER_NAV = [
@@ -56,6 +61,8 @@ const MEMBER_NAV = [
 const FINANCE_NAV = [
   { label: "Finance Dashboard", href: "/finance", icon: "BarChart3" },
   { label: "Record Transaction", href: "/finance/record", icon: "PlusCircle" },
+  { label: "Transactions", href: "/finance/transactions", icon: "Receipt" },
+  { label: "Pledges", href: "/finance/pledges", icon: "HandCoins" },
   { label: "Reports", href: "/finance/reports", icon: "FileText" },
 ];
 
@@ -85,6 +92,10 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
 
   const showFinance = FINANCE_ROLES.includes(userRole);
   const showAdmin = ADMIN_ROLES.includes(userRole);
+  // The member directory is for church members; VISITOR accounts can't open it
+  const memberNav = MEMBER_NAV.filter(
+    (item) => item.href !== "/directory" || userRole !== "VISITOR",
+  );
 
   return (
     <Sidebar>
@@ -106,7 +117,7 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
           <SidebarGroupLabel>Member</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {MEMBER_NAV.map((item) => {
+              {memberNav.map((item) => {
                 const Icon = ICONS[item.icon];
                 return (
                   <SidebarMenuItem key={item.href}>
@@ -187,7 +198,7 @@ export function DashboardSidebar({ userRole, userName }: DashboardSidebarProps) 
 
       <SidebarFooter className="border-t p-4">
         <div className="mb-2 truncate text-sm font-medium">{userName}</div>
-        <form action="/api/auth/signout" method="POST">
+        <form action={signOutAction}>
           <button
             type="submit"
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

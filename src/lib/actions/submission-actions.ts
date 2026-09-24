@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { after } from "next/server";
 import { submissionSchema } from "@/lib/validations/submission";
-import { sanitizeHtml } from "@/lib/sanitize";
 import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
 import { sendNewSubmissionEmail } from "@/lib/email/send";
 import { getChurchInfo } from "@/lib/settings";
@@ -31,14 +30,15 @@ export async function submitPrayerRequest(formData: FormData) {
   }
 
   try {
-    const sanitizedContent = sanitizeHtml(parsed.data.content);
+    // Plain text: React escapes it wherever it is rendered, so it is stored as typed.
+    const plainContent = parsed.data.content.trim();
 
     await prisma.submission.create({
       data: {
         type: "PRAYER_REQUEST",
         name: parsed.data.name.trim(),
         email: parsed.data.email || null,
-        content: sanitizedContent,
+        content: plainContent,
         isPublic: parsed.data.isPublic,
         status: "PENDING",
         submittedById: session?.user?.id || null,
@@ -97,14 +97,15 @@ export async function submitTestimony(formData: FormData) {
   }
 
   try {
-    const sanitizedContent = sanitizeHtml(parsed.data.content);
+    // Plain text: React escapes it wherever it is rendered, so it is stored as typed.
+    const plainContent = parsed.data.content.trim();
 
     await prisma.submission.create({
       data: {
         type: "TESTIMONY",
         name: parsed.data.name.trim(),
         email: parsed.data.email || null,
-        content: sanitizedContent,
+        content: plainContent,
         isPublic: parsed.data.isPublic,
         status: "PENDING",
         submittedById: session?.user?.id || null,

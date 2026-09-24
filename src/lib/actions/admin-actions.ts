@@ -1,54 +1,16 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireRole, auth } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
+import { writeAuditLog } from "@/lib/audit";
 import { type UserRole } from "@/lib/constants";
-import { canChangeRole, canManageUser } from "@/lib/authz/roles";
+import { canChangeRole, canManageUser, ROLE_VALUES } from "@/lib/authz/roles";
 import { revokeSessions } from "@/lib/authz/revoke";
 import { sendAccountApprovedEmail } from "@/lib/email/send";
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
-import type { Gender, MaritalStatus } from "@prisma/client";
-
-export async function auditLog(
-  actionOrObj: string | { action: string; entity: string; entityId: string; details?: string | Record<string, unknown>; userId?: string },
-  entity?: string,
-  entityId?: string,
-  details?: Record<string, unknown>
-) {
-  const session = await auth();
-  const userId = (typeof actionOrObj === "object" ? actionOrObj.userId : undefined) || session?.user?.id;
-  if (!userId) return;
-
-  if (typeof actionOrObj === "object") {
-    const detailsStr =
-      typeof actionOrObj.details === "string"
-        ? actionOrObj.details
-        : actionOrObj.details
-          ? JSON.stringify(actionOrObj.details)
-          : null;
-
-    await prisma.auditLog.create({
-      data: {
-        action: actionOrObj.action,
-        entity: actionOrObj.entity,
-        entityId: actionOrObj.entityId,
-        details: detailsStr,
-        userId,
-      },
-    });
-  } else {
-    await prisma.auditLog.create({
-      data: {
-        action: actionOrObj,
-        entity: entity!,
-        entityId: entityId!,
-        details: details ? JSON.stringify(details) : null,
-        userId,
-      },
-    });
-  }
-}
+import type { Prisma } from "@prisma/client";
+import { adminUpdateUserSchema } from "@/lib/validations/user";
 
 export async function approveUser(userId: string) {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
@@ -77,9 +39,15 @@ export async function approveUser(userId: string) {
       },
     });
 
-    await auditLog("APPROVE_USER", "User", userId, {
-      email: user.email,
-      previousStatus: user.status,
+    await writeAuditLog({
+      action: "APPROVE_USER",
+      entity: "User",
+      entityId: userId,
+      userId: session.user.id,
+      details: {
+        email: user.email,
+        previousStatus: user.status,
+      },
     });
 
     // Send account approved email asynchronously
@@ -132,9 +100,15 @@ export async function reactivateUser(userId: string) {
       await revokeSessions(tx, userId);
     });
 
-    await auditLog("REACTIVATE_USER", "User", userId, {
-      email: user.email,
-      previousStatus: user.status,
+    await writeAuditLog({
+      action: "REACTIVATE_USER",
+      entity: "User",
+      entityId: userId,
+      userId: session.user.id,
+      details: {
+        email: user.email,
+        previousStatus: user.status,
+      },
     });
 
     const triggerReactivatedEmail = async () => {
@@ -160,6 +134,33 @@ export async function reactivateUser(userId: string) {
   }
 }
 
+class LastSuperAdminError extends Error {}
+
+/**
+ * Throws if removing `userId` from the active SUPER_ADMIN set would leave none.
+ * Locks the active SUPER_ADMIN rows (FOR UPDATE) so two concurrent demotions or
+ * deactivations cannot both pass the check.
+ */
+async function assertNotLastSuperAdmin(tx: Prisma.TransactionClient, userId: string) {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "users"
+    WHERE "role" = 'SUPER_ADMIN' AND "status" = 'ACTIVE'
+    FOR UPDATE
+  `;
+  if (rows.filter((r) => r.id !== userId).length === 0) {
+    throw new LastSuperAdminError("At least one active Super Admin is required");
+  }
+}
+
+/** Pages that list users or show their names (e.g. department leaders). */
+function revalidateUserListings(userId: string) {
+  revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/directory");
+  revalidatePath("/leaders");
+  revalidatePath("/departments");
+}
+
 export async function deactivateUser(userId: string) {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
@@ -179,22 +180,30 @@ export async function deactivateUser(userId: string) {
     if (!check.allowed) return { success: false, error: check.reason };
 
     await prisma.$transaction(async (tx) => {
+      if (user.role === "SUPER_ADMIN") {
+        await assertNotLastSuperAdmin(tx, userId);
+      }
       await tx.user.update({
         where: { id: userId },
         data: { status: "INACTIVE" },
       });
       await revokeSessions(tx, userId);
+      await writeAuditLog(
+        {
+          action: "DEACTIVATE_USER",
+          entity: "User",
+          entityId: userId,
+          userId: session.user.id,
+          details: { email: user.email, previousStatus: user.status },
+        },
+        tx,
+      );
     });
 
-    await auditLog("DEACTIVATE_USER", "User", userId, {
-      email: user.email,
-      previousStatus: user.status,
-    });
-
-    revalidatePath("/admin/users");
-    revalidatePath(`/admin/users/${userId}`);
+    revalidateUserListings(userId);
     return { success: true };
   } catch (err) {
+    if (err instanceof LastSuperAdminError) return { success: false, error: err.message };
     console.error("deactivateUser error:", err);
     return { success: false, error: "Failed to deactivate user." };
   }
@@ -203,6 +212,10 @@ export async function deactivateUser(userId: string) {
 export async function changeUserRole(userId: string, newRole: UserRole) {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
+  if (!(ROLE_VALUES as readonly string[]).includes(newRole)) {
+    return { success: false, error: "Invalid role" };
+  }
+
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -210,6 +223,7 @@ export async function changeUserRole(userId: string, newRole: UserRole) {
     });
 
     if (!user) return { success: false, error: "User not found" };
+    if (user.role === newRole) return { success: true };
 
     // Use the authorization rules
     const check = canChangeRole(
@@ -219,31 +233,35 @@ export async function changeUserRole(userId: string, newRole: UserRole) {
     );
     if (!check.allowed) return { success: false, error: check.reason };
 
-    // Prevent demoting the last SUPER_ADMIN
-    if (user.role === "SUPER_ADMIN" && newRole !== "SUPER_ADMIN") {
-      const superAdminCount = await prisma.user.count({
-        where: { role: "SUPER_ADMIN", status: "ACTIVE" },
-      });
-      if (superAdminCount <= 1) {
-        return { success: false, error: "Cannot demote the last Super Admin" };
+    await prisma.$transaction(async (tx) => {
+      // Prevent demoting the last SUPER_ADMIN (race-safe)
+      if (user.role === "SUPER_ADMIN") {
+        await assertNotLastSuperAdmin(tx, userId);
       }
-    }
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { role: newRole },
+      await tx.user.update({
+        where: { id: userId },
+        data: { role: newRole },
+      });
+      // Existing sessions carry the old role in their JWT; force re-authentication
+      await revokeSessions(tx, userId);
+      await writeAuditLog(
+        {
+          action: "CHANGE_ROLE",
+          entity: "User",
+          entityId: userId,
+          userId: session.user.id,
+          details: { email: user.email, previousRole: user.role, newRole },
+        },
+        tx,
+      );
     });
 
-    await auditLog("CHANGE_ROLE", "User", userId, {
-      email: user.email,
-      previousRole: user.role,
-      newRole,
-    });
-
-    revalidatePath("/admin/users");
-    revalidatePath(`/admin/users/${userId}`);
+    revalidateUserListings(userId);
     return { success: true };
   } catch (err) {
+    if (err instanceof LastSuperAdminError) {
+      return { success: false, error: "Cannot demote the last Super Admin" };
+    }
     console.error("changeUserRole error:", err);
     return { success: false, error: "Failed to change user role." };
   }
@@ -251,6 +269,23 @@ export async function changeUserRole(userId: string, newRole: UserRole) {
 
 export async function updateUser(userId: string, formData: FormData) {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+
+  const parsed = adminUpdateUserSchema.safeParse({
+    firstName: formData.get("firstName") ?? "",
+    lastName: formData.get("lastName") ?? "",
+    phone: formData.get("phone") ?? undefined,
+    address: formData.get("address") ?? undefined,
+    occupation: formData.get("occupation") ?? undefined,
+    gender: formData.get("gender") ?? undefined,
+    maritalStatus: formData.get("maritalStatus") ?? undefined,
+    departmentId: formData.get("departmentId") ?? undefined,
+    dateOfBirth: formData.get("dateOfBirth") ?? undefined,
+    memberSince: formData.get("memberSince") ?? undefined,
+  });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message };
+  }
+  const data = parsed.data;
 
   try {
     const targetUser = await prisma.user.findUnique({
@@ -268,49 +303,27 @@ export async function updateUser(userId: string, formData: FormData) {
     );
     if (!check.allowed) return { success: false, error: check.reason };
 
-    const firstName = (formData.get("firstName") as string)?.trim();
-    const lastName = (formData.get("lastName") as string)?.trim();
-    const phone = (formData.get("phone") as string)?.trim() || null;
-    const gender = (formData.get("gender") as Gender) || null;
-    const maritalStatus = (formData.get("maritalStatus") as MaritalStatus) || null;
-    const address = (formData.get("address") as string)?.trim() || null;
-    const occupation = (formData.get("occupation") as string)?.trim() || null;
-    const departmentId = (formData.get("departmentId") as string)?.trim() || null;
-
-    const dobRaw = formData.get("dateOfBirth") as string;
-    const dateOfBirth = dobRaw ? new Date(dobRaw) : null;
-
-    const memberSinceRaw = formData.get("memberSince") as string;
-    const memberSince = memberSinceRaw ? new Date(memberSinceRaw) : null;
-
-    if (!firstName || !lastName) {
-      return { success: false, error: "First name and last name are required" };
-    }
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        firstName,
-        lastName,
-        name: `${firstName} ${lastName}`,
-        phone,
-        gender,
-        maritalStatus,
-        address,
-        occupation,
-        dateOfBirth,
-        memberSince,
-        departmentId: departmentId === "none" ? null : departmentId,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          ...data,
+          name: `${data.firstName} ${data.lastName}`,
+        },
+      });
+      await writeAuditLog(
+        {
+          action: "UPDATE_USER",
+          entity: "User",
+          entityId: userId,
+          userId: session.user.id,
+          details: { email: targetUser.email, fields: Object.keys(data) },
+        },
+        tx,
+      );
     });
 
-    await auditLog("UPDATE_USER", "User", userId, {
-      email: targetUser.email,
-      updatedBy: session.user.id,
-    });
-
-    revalidatePath("/admin/users");
-    revalidatePath(`/admin/users/${userId}`);
+    revalidateUserListings(userId);
     revalidatePath(`/admin/users/${userId}/edit`);
     return { success: true };
   } catch (err) {
@@ -320,18 +333,40 @@ export async function updateUser(userId: string, formData: FormData) {
 }
 
 export async function assignUserToDepartment(userId: string, departmentId: string | null) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   try {
-    await prisma.user.update({
+    const target = await prisma.user.findUnique({
       where: { id: userId },
-      data: { departmentId },
+      select: { role: true, email: true, departmentId: true },
+    });
+    if (!target) return { success: false, error: "User not found" };
+
+    const check = canManageUser(
+      { id: session.user.id, role: session.user.role },
+      { id: userId, role: target.role },
+    );
+    if (!check.allowed) return { success: false, error: check.reason };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { departmentId },
+      });
+      await writeAuditLog(
+        {
+          action: "ASSIGN_DEPARTMENT",
+          entity: "User",
+          entityId: userId,
+          userId: session.user.id,
+          details: { email: target.email, from: target.departmentId, to: departmentId },
+        },
+        tx,
+      );
     });
 
-    revalidatePath("/admin/settings/departments");
-    revalidatePath("/admin/users");
-    revalidatePath(`/admin/users/${userId}`);
-    revalidatePath("/departments");
+    revalidatePath("/admin/settings/departments", "layout");
+    revalidateUserListings(userId);
 
     return { success: true };
   } catch (err) {

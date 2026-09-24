@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { recordPaystackPayment } from "@/lib/finance/paystack";
+import { paystackReferenceSchema } from "@/lib/validations/finance";
+import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
 
 export const metadata: Metadata = {
   title: "Giving Complete",
@@ -13,14 +15,16 @@ interface GiveCompletePageProps {
 
 export default async function GiveCompletePage({ searchParams }: GiveCompletePageProps) {
   const params = await searchParams;
-  const reference = params.reference || params.trxref;
+  const rawReference = params.reference || params.trxref;
+  const parsedReference = rawReference ? paystackReferenceSchema.safeParse(rawReference) : null;
+  const reference = parsedReference?.success ? parsedReference.data : null;
 
   if (!reference) {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
         <h1 className="text-2xl font-bold text-destructive">Missing Reference</h1>
         <p className="mt-2 text-muted-foreground">
-          No payment reference was provided in the callback.
+          No valid payment reference was provided in the callback.
         </p>
         <Link
           href="/give"
@@ -37,7 +41,12 @@ export default async function GiveCompletePage({ searchParams }: GiveCompletePag
   let isSuccess = false;
   let errorMessage: string | null = null;
 
-  if (!paystackSecretKey) {
+  // This GET page calls Paystack and writes to the ledger: throttle it per IP
+  const limit = await checkRateLimit("paystack_complete", await getClientIp(), 20, "60 s");
+
+  if (!limit.success) {
+    errorMessage = "Too many requests. Please wait a minute and refresh this page.";
+  } else if (!paystackSecretKey) {
     errorMessage = "Payment service is currently unavailable. If debited, please contact the church office.";
   } else {
     try {
@@ -47,6 +56,7 @@ export default async function GiveCompletePage({ searchParams }: GiveCompletePag
           method: "GET",
           headers: { Authorization: `Bearer ${paystackSecretKey}` },
           cache: "no-store",
+          signal: AbortSignal.timeout(15_000),
         },
       );
 

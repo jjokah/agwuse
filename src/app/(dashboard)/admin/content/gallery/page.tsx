@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ImageIcon } from "lucide-react";
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminGalleryPage() {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
 
   const images = await prisma.galleryImage.findMany({
     orderBy: [{ albumName: "asc" }, { sortOrder: "asc" }],

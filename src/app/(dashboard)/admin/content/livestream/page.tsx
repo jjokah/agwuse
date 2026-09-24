@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { LiveStreamForm } from "./livestream-form";
 
@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 export default async function AdminLiveStreamPage() {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
 
   const config = await prisma.liveStreamConfig.findUnique({
     where: { id: "default" },

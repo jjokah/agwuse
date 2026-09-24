@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -44,7 +44,7 @@ export default async function AdminUsersPage({
 }: {
   searchParams: Promise<{ q?: string; status?: string; role?: string; page?: string; pageSize?: string }>;
 }) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
   const params = await searchParams;
   const { q, status, role } = params;
   const { page, pageSize, skip, take } = parsePageParams(params);

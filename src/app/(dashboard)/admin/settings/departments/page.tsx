@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, PlusCircle } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import { parsePageParams, pageMeta } from "@/lib/pagination";
@@ -36,7 +36,7 @@ export default async function DepartmentsSettingsPage({
 }: {
   searchParams?: Promise<{ category?: string; page?: string; pageSize?: string }>;
 }) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
   const params = searchParams ? await searchParams : {};
   const { category } = params;
   const { page, pageSize, skip, take } = parsePageParams(params);

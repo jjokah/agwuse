@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
 import { recordPaystackPayment } from "@/lib/finance/paystack";
+import { paystackReferenceSchema } from "@/lib/validations/finance";
 
 const verifySchema = z.object({
-  reference: z.string().min(1, { error: "Transaction reference is required" }),
+  reference: paystackReferenceSchema,
 });
 
 export async function POST(request: Request) {
@@ -43,17 +44,26 @@ export async function POST(request: Request) {
   const { reference } = parsed.data;
 
   // Call Paystack verify endpoint
-  const response = await fetch(
-    `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-    {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${paystackSecretKey}`,
+  let result;
+  try {
+    const response = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${paystackSecretKey}`,
+        },
+        signal: AbortSignal.timeout(15_000),
       },
-    },
-  );
-
-  const result = await response.json();
+    );
+    result = await response.json();
+  } catch (err) {
+    console.error("Paystack verify request failed:", err);
+    return NextResponse.json(
+      { error: "Could not reach the payment processor. If you were debited, your gift will still be recorded." },
+      { status: 502 },
+    );
+  }
 
   if (!result.status || result.data?.status !== "success") {
     return NextResponse.json(

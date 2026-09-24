@@ -21,7 +21,6 @@ A comprehensive church management web application providing a public-facing webs
 | Auth | Auth.js (next-auth) | v5 |
 | Validation | Zod | 4.x |
 | Forms | React Hook Form | 7.x |
-| Charts | Recharts | 3.x |
 | Email | Resend + React Email | 6.x |
 | Payments | Paystack | Inline JS |
 | Rich Text | TipTap | 3.x |
@@ -70,7 +69,7 @@ A comprehensive church management web application providing a public-facing webs
 - Searchable member directory (active members only)
 
 ### Admin Panel
-- Dashboard with stat cards, giving trends, and membership charts
+- Dashboard with stat cards (members, giving this month/year) and recent activity
 - **User Management**: Search, filter, approve, assign roles, deactivate accounts
 - **Financial Management**: Record tithes/offerings/donations/expenses, pledge tracking, receipt generation (PDF), financial reports with CSV/PDF export, auto-generated receipt numbers (`AG-YYYY-NNNNN`)
 - **Content Management**: Blog editor (TipTap WYSIWYG), event scheduling, sermon archive, gallery management, prayer request/testimony moderation queue
@@ -95,7 +94,7 @@ A comprehensive church management web application providing a public-facing webs
 agwuse/
 ├── prisma/
 │   ├── prisma.config.ts         # Prisma 7 config with pg adapter
-│   ├── schema.prisma            # 16 models, 13 enums
+│   ├── schema.prisma            # 19 models, 14 enums
 │   ├── seed.ts                  # Departments, categories, super admin
 │   └── migrations/
 ├── public/
@@ -124,12 +123,12 @@ agwuse/
 │   │   ├── ui/                  # shadcn/ui components
 │   │   ├── layout/              # Header, footer, sidebar, topbar
 │   │   ├── forms/               # Login, register, profile, submission forms
-│   │   ├── charts/              # Giving trends, income breakdown
 │   │   ├── public/              # Hero, service times, minister cards
 │   │   └── shared/              # DataTable, stat cards, confirm dialog
 │   ├── lib/
 │   │   ├── auth.ts              # Auth.js config with Prisma adapter
-│   │   ├── auth.config.ts       # Edge-compatible auth config
+│   │   ├── route-access.ts      # Pure route-access rules used by the proxy
+│   │   ├── tz.ts                # Africa/Lagos date/time helpers
 │   │   ├── prisma.ts            # PrismaClient singleton
 │   │   ├── constants.ts         # Church info, nav items, roles
 │   │   ├── utils.ts             # cn(), formatCurrency(), formatDate()
@@ -140,15 +139,15 @@ agwuse/
 │   │   ├── email/               # Resend wrapper + email templates
 │   │   └── validations/         # Zod schemas
 │   ├── hooks/                   # Custom React hooks
+│   ├── proxy.ts                 # Next.js 16 proxy: auth + RBAC route protection
 │   └── types/                   # TypeScript types, next-auth augmentation
 ├── docker-compose.yml           # PostgreSQL 17
 ├── package.json
 ├── next.config.ts
-├── middleware.ts                 # Auth + RBAC route protection
 └── tsconfig.json
 ```
 
-**59 routes total** | **48 component files** | **16 database models** | **0 TypeScript errors**
+**19 database models** | **14 enums**
 
 ---
 
@@ -235,8 +234,8 @@ Log in at [http://localhost:3000/login](http://localhost:3000/login) with the su
 |----------|-------------|----------|
 | `DATABASE_URL` | PostgreSQL connection string | Yes |
 | `DIRECT_DATABASE_URL` | Direct PostgreSQL connection (bypasses pooler) | Yes |
-| `AUTH_SECRET` | NextAuth secret key (generate with `openssl rand -base64 32`) | Yes |
-| `NEXTAUTH_SECRET` | Compatibility value used by current environment validation; set equal to `AUTH_SECRET` | Yes |
+| `AUTH_SECRET` | Auth.js secret key (generate with `openssl rand -base64 32`) | Yes |
+| `NEXTAUTH_SECRET` | Legacy name, accepted instead of `AUTH_SECRET` | No |
 | `AUTH_URL` | App base URL (`http://localhost:3000` for dev) | Yes |
 | `NEXT_PUBLIC_APP_URL` | Public app URL (same as AUTH_URL) | Yes |
 | `EMAIL_TRANSPORT` | `log` for local development or `resend` for real delivery | No |
@@ -247,19 +246,22 @@ Log in at [http://localhost:3000/login](http://localhost:3000/login) with the su
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob read/write token | For uploads |
 | `UPSTASH_REDIS_REST_URL` | Upstash Redis URL | For rate limiting |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis token | For rate limiting |
+| `DATABASE_POOL_MAX` | Max pg connections per server instance (default 5) | No |
+| `AUTH_REVALIDATE_SECONDS` | How often a session is re-checked against the DB (default 60) | No |
+| `TRUSTED_PROXY_HOPS` | Proxies in front of the app, for client-IP rate limiting (default 1) | No |
 
 ---
 
 ## Database
 
-### Models (16)
+### Models (19)
 
 | Category | Models |
 |----------|--------|
 | Auth | User, Account, Session, VerificationToken, Token |
 | Core | Department |
-| Financial | FinancialTransaction, Pledge, FinancialCategory |
-| Content | BlogPost, Event, Submission, GalleryImage, Sermon |
+| Financial | FinancialTransaction, Pledge, FinancialCategory, PaymentIntent, ReceiptCounter |
+| Content | BlogPost, Event, Submission, GalleryImage, Sermon, LiveStreamConfig |
 | System | AuditLog, ChurchSettings |
 
 ### Prisma Commands
@@ -287,7 +289,17 @@ npm run db:seed         # Seed database with initial data
 | Admin | Full backend: users, finance, content, settings |
 | Super Admin | All access including system settings and audit logs |
 
-Route protection is enforced at the middleware level. API actions use `requireAuth()` and `requireRole()` guards.
+Route protection is enforced by the Next.js 16 proxy (`src/proxy.ts`, Node.js runtime) using the
+rules in `src/lib/route-access.ts`. Every page re-checks access server-side with `requirePageRole()`
+(redirects), and server actions / route handlers use `requireAuth()` / `requireRole()`, which read the
+user's current role and status from the database.
+
+### Time zone
+
+All wall-clock times (event times, "today", report day/month boundaries, displayed dates) are
+**Africa/Lagos** (UTC+1, no DST), regardless of the server's time zone. Use the helpers in
+`src/lib/tz.ts` and `formatDate()`/`formatDateTime()` from `src/lib/utils.ts`; never
+`toISOString().split("T")[0]` for "today".
 
 ---
 
@@ -299,6 +311,9 @@ Route protection is enforced at the middleware level. API actions use `requireAu
 | `npm run build` | Build for production |
 | `npm run start` | Start production server |
 | `npm run lint` | Run ESLint |
+| `npm run typecheck` | Type-check with `tsc --noEmit` |
+| `npm test` | Run the Vitest suites |
+| `npm run db:deploy` | Apply pending migrations (CI / production) |
 | `npm run db:migrate` | Run Prisma migrations |
 | `npm run db:push` | Push schema to database |
 | `npm run db:generate` | Generate Prisma Client |
@@ -387,7 +402,7 @@ your shell but Docker Desktop is open, restart the terminal so it picks up `PATH
 - [ ] Configure Vercel Blob for image uploads
 - [ ] Set up Upstash Redis for rate limiting
 - [ ] Enable daily database backups
-- [ ] Review CSP headers in `next.config.ts`
+- [ ] Review CSP headers in `src/lib/security-headers.ts`
 
 ---
 

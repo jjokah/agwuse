@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
+import { requirePageRole } from "@/lib/auth";
+import { MEMBER_ROLES } from "@/lib/authz/roles";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Input } from "@/components/ui/input";
 import { Users } from "lucide-react";
@@ -16,8 +18,11 @@ export default async function DirectoryPage({
 }: {
   searchParams: Promise<{ q?: string; page?: string; pageSize?: string }>;
 }) {
+  // Contact details of all members: church members only (not VISITOR accounts)
+  await requirePageRole(MEMBER_ROLES);
+
   const params = await searchParams;
-  const { q } = params;
+  const q = params.q?.trim();
   const { page, pageSize, skip, take } = parsePageParams(params);
 
   const where: Prisma.UserWhereInput = {

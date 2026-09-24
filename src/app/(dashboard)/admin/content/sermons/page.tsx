@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
 import { parsePageParams, pageMeta } from "@/lib/pagination";
@@ -27,7 +27,7 @@ export default async function AdminSermonsPage({
 }: {
   searchParams?: Promise<{ q?: string; page?: string; pageSize?: string }>;
 }) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
   const params = searchParams ? await searchParams : {};
   const { q } = params;
   const { page, pageSize, skip, take } = parsePageParams(params);

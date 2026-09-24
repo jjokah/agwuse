@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -30,7 +30,7 @@ export default async function AuditLogPage({
 }: {
   searchParams: Promise<{ q?: string; entity?: string; page?: string; pageSize?: string }>;
 }) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
   const params = await searchParams;
   const { q, entity } = params;
   const { page, pageSize, skip, take } = parsePageParams(params);

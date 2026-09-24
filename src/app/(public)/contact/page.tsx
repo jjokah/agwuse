@@ -108,7 +108,7 @@ export default async function ContactPage() {
                   <span className="font-semibold text-brand-gold">
                     Find us:
                   </span>{" "}
-                  {CHURCH_INFO.address}
+                  {churchInfo.address}
                 </p>
               </div>
             </div>

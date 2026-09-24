@@ -9,7 +9,13 @@ function getDatabasePoolMax(): number {
 
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL!;
-  const pool = new pg.Pool({ connectionString, max: getDatabasePoolMax() });
+  const pool = new pg.Pool({
+    connectionString,
+    max: getDatabasePoolMax(),
+    // Fail fast instead of hanging a request (or a build prerender) on an unreachable DB
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 30_000,
+  });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }

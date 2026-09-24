@@ -1,9 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
-import { CHURCH_INFO } from "@/lib/constants";
+import { getChurchInfo } from "@/lib/settings";
 
 /** Full-bleed editorial hero for the home page. */
-export function HomeHero() {
+export async function HomeHero() {
+  const info = await getChurchInfo();
   return (
     <section className="relative flex min-h-[85svh] items-end overflow-hidden bg-brand-navy">
       <Image
@@ -23,7 +24,7 @@ export function HomeHero() {
           A Center of Love&nbsp;&amp; Worship
         </h1>
         <p className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-700 motion-safe:delay-300 motion-safe:fill-mode-both mt-5 max-w-xl text-lg leading-relaxed text-white/80">
-          {CHURCH_INFO.name}. Join us this Sunday at {CHURCH_INFO.address}.
+          {info.name}. Join us this Sunday at {info.address}.
         </p>
         <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4 motion-safe:duration-700 motion-safe:delay-300 motion-safe:fill-mode-both mt-9 flex flex-col gap-4 sm:flex-row">
           <Link

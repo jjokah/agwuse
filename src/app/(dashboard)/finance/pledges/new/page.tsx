@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { PledgeForm } from "@/components/finance/pledge-form";
 
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 export default async function FinanceNewPledgePage() {
-  await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

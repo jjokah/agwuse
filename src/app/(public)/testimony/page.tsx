@@ -69,7 +69,7 @@ export default async function TestimonyPage() {
                     key={t.id}
                     className="rounded-3xl border-l-4 border-brand-gold bg-paper p-7 shadow-warm"
                   >
-                    <blockquote className="leading-relaxed text-ink-soft">
+                    <blockquote className="whitespace-pre-line leading-relaxed text-ink-soft">
                       {t.content}
                     </blockquote>
                     <figcaption className="mt-4 flex items-center gap-3">
