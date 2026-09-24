@@ -48,6 +48,41 @@ export type ChurchInfo = {
   facebook: readonly string[];
 };
 
+/**
+ * The subset of church settings that may be serialized to client components on
+ * public pages. Excludes internal values such as notification_emails.
+ */
+export type PublicChurchInfo = Pick<ChurchInfo, "name" | "shortName" | "tagline" | "address" | "phones">;
+
+export function toPublicChurchInfo(info: ChurchInfo): PublicChurchInfo {
+  return {
+    name: info.name,
+    shortName: info.shortName,
+    tagline: info.tagline,
+    address: info.address,
+    phones: [...info.phones],
+  };
+}
+
+export interface ServiceTime {
+  day: string;
+  time: string;
+  activity: string;
+}
+
+const SERVICE_TIME_RE = /^(\S+)\s+(\d{1,2}(?::\d{2})?\s*[AaPp]\.?[Mm]\.?)\s*[:–-]\s*(.+)$/;
+
+/**
+ * Parses a service_times entry such as "Sunday 8:00 AM: Main Service".
+ * Entries that don't follow that shape are kept whole as the activity.
+ */
+export function parseServiceTime(entry: string): ServiceTime {
+  const text = entry.trim();
+  const match = SERVICE_TIME_RE.exec(text);
+  if (!match) return { day: "", time: "", activity: text };
+  return { day: match[1], time: match[2].toUpperCase().replace(/\./g, ""), activity: match[3].trim() };
+}
+
 export const churchSettingsKeySchema = z.enum([
   "church_name",
   "church_short_name",

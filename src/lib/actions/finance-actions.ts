@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { OfferingCategory } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { transactionSchema, pledgeSchema } from "@/lib/validations/finance";
-import { recordTransaction } from "@/lib/finance/record-transaction";
-import { auditLog } from "@/lib/actions/admin-actions";
+import { recordTransaction, scheduleReceiptEmail } from "@/lib/finance/record-transaction";
+import { writeAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import type { ActionResult } from "@/lib/action-result";
 
@@ -31,6 +31,10 @@ export async function createTransaction(formData: FormData) {
   }
 
   const data = parsed.data;
+  const isExpense = data.type === "EXPENSE";
+  // Expenses are never attributed to a member or credited to a pledge
+  const memberId = isExpense ? null : data.memberId || null;
+  const pledgeId = isExpense ? null : data.pledgeId || null;
 
   try {
     let expenseCategoryName: string | null = null;
@@ -49,25 +53,41 @@ export async function createTransaction(formData: FormData) {
         currency: "NGN",
         paymentMethod: data.paymentMethod,
         date: data.date,
-        memberId: data.memberId || null,
-        category: (data.offeringCategory || "GENERAL") as OfferingCategory,
-        customCategory: data.type === "EXPENSE" ? expenseCategoryName : null,
+        memberId,
+        category: (data.type === "OFFERING" ? data.offeringCategory || "GENERAL" : "GENERAL") as OfferingCategory,
+        customCategory: isExpense ? expenseCategoryName : null,
         referenceNumber: data.referenceNumber || null,
         notes: data.notes || null,
-        pledgeId: data.pledgeId || null,
+        pledgeId,
         recordedById: session.user.id,
         auditAction: "CREATE_TRANSACTION",
       });
     });
 
+    // Only after the ledger row has committed
+    scheduleReceiptEmail(transaction);
+
+    revalidatePath("/admin");
     revalidatePath("/admin/finance");
     revalidatePath("/admin/finance/transactions");
     revalidatePath("/finance");
+    revalidatePath("/finance/transactions");
     revalidatePath("/my-giving");
+    revalidatePath("/dashboard");
+    if (pledgeId) {
+      revalidatePath(`/admin/finance/pledges/${pledgeId}`);
+      revalidatePath(`/finance/pledges/${pledgeId}`);
+      revalidatePath("/admin/finance/pledges");
+      revalidatePath("/finance/pledges");
+    }
 
     return { success: true, receiptNumber: transaction.receiptNumber };
   } catch (err: unknown) {
     console.error("createTransaction error:", err);
+    // Pledge rule violations carry messages that are safe and useful to show
+    if (err instanceof Error && /pledge/i.test(err.message)) {
+      return { success: false, error: err.message };
+    }
     return { success: false, error: "Failed to record transaction. Please try again." };
   }
 }
@@ -103,7 +123,7 @@ export async function createPledge(formData: FormData): Promise<ActionResult<{ i
       },
     });
 
-    await auditLog({
+    await writeAuditLog({
       action: "CREATE_PLEDGE",
       entity: "Pledge",
       entityId: pledge.id,
@@ -143,12 +163,16 @@ export async function cancelPledge(pledgeId: string): Promise<ActionResult<void>
       return { success: false, error: `Cannot cancel a pledge that is ${pledge.status.toLowerCase()}` };
     }
 
-    await prisma.pledge.update({
-      where: { id: pledgeId },
+    // Conditional update: a payment that fulfils the pledge concurrently wins
+    const cancelled = await prisma.pledge.updateMany({
+      where: { id: pledgeId, status: "ACTIVE" },
       data: { status: "CANCELLED" },
     });
+    if (cancelled.count === 0) {
+      return { success: false, error: "This pledge changed while you were cancelling it. Please refresh." };
+    }
 
-    await auditLog({
+    await writeAuditLog({
       action: "CANCEL_PLEDGE",
       entity: "Pledge",
       entityId: pledgeId,

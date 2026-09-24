@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -19,7 +19,8 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { PlusCircle, Receipt } from "lucide-react";
 import { VoidTransactionDialog } from "@/components/finance/void-dialog";
-import type { TransactionType, PaymentMethod, Prisma } from "@prisma/client";
+import { buildTransactionWhere } from "@/lib/finance/transaction-filters";
+import { PAYMENT_METHOD_LABELS } from "@/lib/finance/labels";
 
 export const metadata: Metadata = {
   title: "Transactions",
@@ -54,29 +55,12 @@ export default async function FinanceTransactionsPage({
     pageSize?: string;
   }>;
 }) {
-  await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
   const params = searchParams ? await searchParams : {};
   const { type, method, from, to, q } = params;
   const { page, pageSize, skip, take } = parsePageParams(params);
 
-  const where: Prisma.FinancialTransactionWhereInput = {};
-  if (type) where.type = type as TransactionType;
-  if (method) where.paymentMethod = method as PaymentMethod;
-
-  if (from || to) {
-    where.date = {
-      ...(from ? { gte: new Date(from) } : {}),
-      ...(to ? { lte: new Date(to + "T23:59:59.999Z") } : {}),
-    };
-  }
-
-  if (q) {
-    where.OR = [
-      { receiptNumber: { contains: q, mode: "insensitive" } },
-      { member: { firstName: { contains: q, mode: "insensitive" } } },
-      { member: { lastName: { contains: q, mode: "insensitive" } } },
-    ];
-  }
+  const where = buildTransactionWhere({ type, method, from, to, q });
 
   const [transactions, total] = await Promise.all([
     prisma.financialTransaction.findMany({
@@ -189,7 +173,7 @@ export default async function FinanceTransactionsPage({
                         ? `${tx.member.firstName} ${tx.member.lastName}`
                         : "—"}
                     </TableCell>
-                    <TableCell>{tx.paymentMethod.replace("_", " ")}</TableCell>
+                    <TableCell>{PAYMENT_METHOD_LABELS[tx.paymentMethod] ?? tx.paymentMethod}</TableCell>
                     <TableCell
                       className={`text-right font-semibold ${
                         tx.type === "EXPENSE" ? "text-red-600" : ""
@@ -199,14 +183,17 @@ export default async function FinanceTransactionsPage({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <a
-                          href={`/api/finance/receipts/${tx.id}`}
-                          download
-                          title="Download Receipt PDF"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-xs font-medium text-foreground hover:bg-muted"
-                        >
-                          <Receipt className="size-3.5" />
-                        </a>
+                        {!tx.voidedAt && tx.type !== "EXPENSE" && (
+                          <a
+                            href={`/api/finance/receipts/${tx.id}`}
+                            download
+                            title="Download Receipt PDF"
+                            aria-label={`Download receipt ${tx.receiptNumber ?? ""}`}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-xs font-medium text-foreground hover:bg-muted"
+                          >
+                            <Receipt className="size-3.5" />
+                          </a>
+                        )}
                         {!tx.voidedAt && (
                           <VoidTransactionDialog
                             transactionId={tx.id}

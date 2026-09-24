@@ -139,12 +139,24 @@ describe("Validation Schemas", () => {
     });
 
     it("validates event schema", () => {
+      // <input type="datetime-local"> value, interpreted as Africa/Lagos time
       const valid = eventSchema.safeParse({
         title: "Easter Revival Service",
-        startDate: "2026-04-05T09:00:00Z",
+        startDate: "2026-04-05T09:00",
         type: "REVIVAL",
       });
       expect(valid.success).toBe(true);
+      expect(valid.data?.startDate.toISOString()).toBe("2026-04-05T08:00:00.000Z");
+    });
+
+    it("rejects events that end before they start", () => {
+      const result = eventSchema.safeParse({
+        title: "Vigil",
+        startDate: "2026-04-05T22:00",
+        endDate: "2026-04-05T20:00",
+        type: "SERVICE",
+      });
+      expect(result.success).toBe(false);
     });
 
     it("validates livestream URLs strictly", () => {
@@ -219,5 +231,29 @@ describe("Validation Schemas", () => {
       });
       expect(mismatch.success).toBe(false);
     });
+  });
+});
+
+describe("adminUpdateUserSchema", () => {
+  it("maps the form's 'none' options to null and parses date-only fields", async () => {
+    const { adminUpdateUserSchema } = await import("@/lib/validations/user");
+    const r = adminUpdateUserSchema.safeParse({
+      firstName: "Ada",
+      lastName: "Obi",
+      gender: "none",
+      maritalStatus: "none",
+      departmentId: "none",
+      dateOfBirth: "1990-05-15",
+      memberSince: "",
+    });
+    expect(r.success).toBe(true);
+    expect(r.data).toMatchObject({ gender: null, maritalStatus: null, departmentId: null, memberSince: null });
+    expect(r.data?.dateOfBirth?.toISOString()).toBe("1990-05-15T00:00:00.000Z");
+  });
+
+  it("rejects invalid enum values and dates", async () => {
+    const { adminUpdateUserSchema } = await import("@/lib/validations/user");
+    expect(adminUpdateUserSchema.safeParse({ firstName: "Ada", lastName: "Obi", gender: "X" }).success).toBe(false);
+    expect(adminUpdateUserSchema.safeParse({ firstName: "Ada", lastName: "Obi", dateOfBirth: "15/05/1990" }).success).toBe(false);
   });
 });

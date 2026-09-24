@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
+import { ALL_ROLES } from "@/lib/authz/roles";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { StatCard } from "@/components/shared/stat-card";
@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { parsePageParams, pageMeta } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
 import { Heart, TrendingUp, Calendar, Download, HandCoins } from "lucide-react";
+import { startOfLagosYear } from "@/lib/tz";
+import { PAYMENT_METHOD_LABELS } from "@/lib/finance/labels";
 
 export const metadata: Metadata = {
   title: "My Giving",
@@ -49,7 +51,7 @@ const columns: Column<Transaction>[] = [
   {
     key: "paymentMethod",
     label: "Method",
-    render: (tx) => tx.paymentMethod.replace("_", " "),
+    render: (tx) => PAYMENT_METHOD_LABELS[tx.paymentMethod] ?? tx.paymentMethod,
   },
   {
     key: "receiptNumber",
@@ -78,8 +80,7 @@ export default async function MyGivingPage({
 }: {
   searchParams?: Promise<{ page?: string; pageSize?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const session = await requirePageRole(ALL_ROLES);
 
   const params = searchParams ? await searchParams : {};
   const { page, pageSize, skip, take } = parsePageParams(params, { defaultSize: 20 });
@@ -105,7 +106,7 @@ export default async function MyGivingPage({
     prisma.financialTransaction.aggregate({
       where: {
         ...where,
-        date: { gte: new Date(new Date().getFullYear(), 0, 1) },
+        date: { gte: startOfLagosYear() },
       },
       _sum: { amount: true },
     }),

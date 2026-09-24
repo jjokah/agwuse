@@ -26,9 +26,9 @@ export function toCsv(
   rows: Record<string, string | number | null | undefined>[],
   columns?: string[],
 ): string {
-  if (rows.length === 0) return "";
-
-  const keys = columns ?? Object.keys(rows[0]);
+  const keys = columns ?? (rows.length > 0 ? Object.keys(rows[0]) : []);
+  if (keys.length === 0) return "";
+  // With explicit columns, an empty result still yields a header row
 
   const header = keys.map((k) => escapeCsvValue(k)).join(",");
   const body = rows
@@ -43,7 +43,7 @@ export function toCsv(
     )
     .join("\n");
 
-  return `${header}\n${body}`;
+  return rows.length > 0 ? `${header}\n${body}` : header;
 }
 
 /** Wrap a value in double quotes if it contains commas, quotes or newlines. */

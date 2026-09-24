@@ -278,6 +278,7 @@ model FinancialTransaction {
   @@index([type])
   @@index([date])
   @@index([memberId])
+  @@index([memberId, date])
   @@index([category])
   @@index([recordedById])
   @@index([date, type])

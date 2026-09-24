@@ -29,3 +29,49 @@ export const changePasswordSchema = z
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+const optionalDateOnly = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v, ctx) => {
+    if (!v) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(new Date(v).getTime())) {
+      ctx.addIssue({ code: "custom", message: "Invalid date" });
+      return z.NEVER;
+    }
+    return new Date(v); // stored as UTC midnight of the chosen day
+  });
+
+const optionalTrimmed = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .optional()
+    .transform((v) => v || null);
+
+/** Admin edit of a member profile (FormData from the admin user edit form). */
+export const adminUpdateUserSchema = z.object({
+  firstName: z.string().trim().min(2, { error: "First name is required" }).max(100),
+  lastName: z.string().trim().min(2, { error: "Last name is required" }).max(100),
+  phone: optionalTrimmed(30),
+  address: optionalTrimmed(500),
+  occupation: optionalTrimmed(100),
+  // "none" = the form's "Not specified" option
+  gender: z
+    .enum(["MALE", "FEMALE", "none", ""])
+    .optional()
+    .transform((v) => (v === "MALE" || v === "FEMALE" ? v : null)),
+  maritalStatus: z
+    .enum(["SINGLE", "MARRIED", "WIDOWED", "DIVORCED", "none", ""])
+    .optional()
+    .transform((v) => (!v || v === "none" ? null : v)),
+  departmentId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (!v || v === "none" ? null : v)),
+  dateOfBirth: optionalDateOnly,
+  memberSince: optionalDateOnly,
+});

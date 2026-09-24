@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,6 +28,7 @@ export function VoidTransactionDialog({
   receiptNumber,
   amount,
 }: VoidTransactionDialogProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
@@ -45,6 +47,7 @@ export function VoidTransactionDialog({
         toast.success("Transaction voided successfully.");
         setOpen(false);
         setReason("");
+        router.refresh();
       } else {
         toast.error(result.error || "Failed to void transaction.");
       }

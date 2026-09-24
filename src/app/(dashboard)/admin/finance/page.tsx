@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { StatCard } from "@/components/shared/stat-card";
 import { formatCurrency } from "@/lib/utils";
@@ -12,17 +12,18 @@ import {
   PlusCircle,
   FileText,
 } from "lucide-react";
+import { startOfLagosMonth, startOfLagosYear } from "@/lib/tz";
 
 export const metadata: Metadata = {
   title: "Finance Management",
 };
 
 export default async function AdminFinancePage() {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const startOfMonth = startOfLagosMonth(now);
+  const startOfYear = startOfLagosYear(now);
 
   const [
     yearIncome,
@@ -50,6 +51,7 @@ export default async function AdminFinancePage() {
     }),
     prisma.financialTransaction.count({ where: { voidedAt: null } }),
     prisma.financialTransaction.findMany({
+      where: { voidedAt: null },
       orderBy: { createdAt: "desc" },
       take: 10,
       include: {

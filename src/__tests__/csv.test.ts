@@ -67,5 +67,7 @@ describe("toCsv", () => {
 
   it("returns empty string for no rows", () => {
     expect(toCsv([])).toBe("");
+    // Explicit columns keep the header even when there are no rows
+    expect(toCsv([], ["Date", "Amount"])).toBe("Date,Amount");
   });
 });

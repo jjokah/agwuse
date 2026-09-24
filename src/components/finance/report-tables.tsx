@@ -1,5 +1,9 @@
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { PAYMENT_METHOD_LABELS } from "@/lib/constants";
+import {
+  PAYMENT_METHOD_LABELS,
+  TRANSACTION_TYPE_LABELS,
+  expenseCategoryLabel,
+} from "@/lib/finance/labels";
 import { StatCard } from "@/components/shared/stat-card";
 import {
   Table,
@@ -65,7 +69,7 @@ export function ReportTables({ data, reportType = "summary" }: ReportTablesProps
                   className="flex items-center justify-between text-sm"
                 >
                   <span>
-                    {item.type.replace("_", " ")}{" "}
+                    {TRANSACTION_TYPE_LABELS[item.type] ?? item.type}{" "}
                     <span className="text-xs text-muted-foreground">
                       ({item.count})
                     </span>
@@ -100,7 +104,7 @@ export function ReportTables({ data, reportType = "summary" }: ReportTablesProps
                   className="flex items-center justify-between text-sm"
                 >
                   <span>
-                    {item.category.replace("_", " ")}{" "}
+                    {item.category}{" "}
                     <span className="text-xs text-muted-foreground">
                       ({item.count})
                     </span>
@@ -130,7 +134,14 @@ export function ReportTables({ data, reportType = "summary" }: ReportTablesProps
         />
       ) : (
         <div className="space-y-2">
-          <h2 className="font-semibold text-sm text-muted-foreground">Recent Transactions in Period</h2>
+          <h2 className="font-semibold text-sm text-muted-foreground">Transactions in Period</h2>
+          {data.transactions.length < data.transactionCount && (
+            <p role="status" className="text-xs text-muted-foreground">
+              Showing the first {data.transactions.length.toLocaleString()} of{" "}
+              {data.transactionCount.toLocaleString()} transactions. Totals above include all
+              of them; export CSV for the complete list.
+            </p>
+          )}
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -151,7 +162,14 @@ export function ReportTables({ data, reportType = "summary" }: ReportTablesProps
                     <TableCell className="font-mono text-xs">
                       {tx.receiptNumber || "—"}
                     </TableCell>
-                    <TableCell>{tx.type.replace("_", " ")}</TableCell>
+                    <TableCell>
+                      {TRANSACTION_TYPE_LABELS[tx.type] ?? tx.type}
+                      {tx.type === "EXPENSE" && (
+                        <span className="block text-xs text-muted-foreground">
+                          {expenseCategoryLabel(tx.customCategory)}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {tx.member
                         ? `${tx.member.firstName} ${tx.member.lastName}`

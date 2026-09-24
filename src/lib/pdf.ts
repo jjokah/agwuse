@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { CHURCH_INFO } from "@/lib/constants";
 import type { ChurchInfo } from "@/lib/settings";
+import { formatDate } from "@/lib/utils";
 
 function addChurchHeader(doc: jsPDF, churchInfo?: Partial<ChurchInfo>) {
   const info = { ...CHURCH_INFO, ...churchInfo };
@@ -63,9 +64,9 @@ export function buildReceiptPDFDoc(
   const fields = [
     ["Date:", receipt.date],
     ["Received From:", receipt.memberName],
-    ["Transaction Type:", receipt.type.replace("_", " ")],
+    ["Transaction Type:", receipt.type],
     ["Amount:", formatNaira(receipt.amount)],
-    ["Payment Method:", receipt.paymentMethod.replace("_", " ")],
+    ["Payment Method:", receipt.paymentMethod],
   ];
 
   if (receipt.notes) {
@@ -113,24 +114,21 @@ export function buildReceiptPDFBuffer(
   return doc.output("arraybuffer");
 }
 
-export function generateReceiptPDF(
-  receipt: ReceiptData,
-  churchInfo?: Partial<ChurchInfo>
-) {
-  const doc = buildReceiptPDFDoc(receipt, churchInfo);
-  doc.save(`receipt-${receipt.receiptNumber}.pdf`);
-}
+/** Display-ready report summary: breakdown keys are human-readable labels. */
+export type ReportSummary = {
+  period: string;
+  totalIncome: number;
+  totalExpense: number;
+  netIncome: number;
+  incomeByType: Record<string, number>;
+  expenseByCategory: Record<string, number>;
+  transactionCount: number;
+  /** Optional footnote, e.g. when the transaction list is truncated. */
+  note?: string;
+};
 
 export function buildReportPDFDoc(
-  summary: {
-    period: string;
-    totalIncome: number;
-    totalExpense: number;
-    netIncome: number;
-    incomeByType: Record<string, number>;
-    expenseByCategory: Record<string, number>;
-    transactionCount: number;
-  },
+  summary: ReportSummary,
   transactions: Record<string, string>[],
   churchInfo?: Partial<ChurchInfo>
 ): jsPDF {
@@ -180,7 +178,7 @@ export function buildReportPDFDoc(
     y += 6;
 
     const incomeRows = Object.entries(summary.incomeByType).map(
-      ([type, amount]) => [type.replace("_", " "), formatNaira(amount)]
+      ([type, amount]) => [type, formatNaira(amount)]
     );
 
     autoTable(doc, {
@@ -211,7 +209,7 @@ export function buildReportPDFDoc(
     y += 6;
 
     const expenseRows = Object.entries(summary.expenseByCategory).map(
-      ([cat, amount]) => [cat.replace("_", " "), formatNaira(amount)]
+      ([cat, amount]) => [cat, formatNaira(amount)]
     );
 
     autoTable(doc, {
@@ -254,6 +252,17 @@ export function buildReportPDFDoc(
     });
   }
 
+  if (summary.note) {
+    y = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y) + 6;
+    if (y > 280) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.text(summary.note, 15, y, { maxWidth: 180 });
+  }
+
   // Page numbers
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -261,7 +270,7 @@ export function buildReportPDFDoc(
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text(
-      `Generated on ${new Date().toLocaleDateString()} | Page ${i} of ${pageCount}`,
+      `Generated on ${formatDate(new Date())} | Page ${i} of ${pageCount}`,
       105,
       290,
       { align: "center" }
@@ -272,15 +281,7 @@ export function buildReportPDFDoc(
 }
 
 export function buildReportPDFBuffer(
-  summary: {
-    period: string;
-    totalIncome: number;
-    totalExpense: number;
-    netIncome: number;
-    incomeByType: Record<string, number>;
-    expenseByCategory: Record<string, number>;
-    transactionCount: number;
-  },
+  summary: ReportSummary,
   transactions: Record<string, string>[],
   churchInfo?: Partial<ChurchInfo>
 ): ArrayBuffer {
@@ -288,19 +289,3 @@ export function buildReportPDFBuffer(
   return doc.output("arraybuffer");
 }
 
-export function generateReportPDF(
-  summary: {
-    period: string;
-    totalIncome: number;
-    totalExpense: number;
-    netIncome: number;
-    incomeByType: Record<string, number>;
-    expenseByCategory: Record<string, number>;
-    transactionCount: number;
-  },
-  transactions: Record<string, string>[],
-  churchInfo?: Partial<ChurchInfo>
-) {
-  const doc = buildReportPDFDoc(summary, transactions, churchInfo);
-  doc.save(`agwuse-report-${Date.now()}.pdf`);
-}

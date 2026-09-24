@@ -1,6 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, it, expect, vi } from "vitest";
-import { isPledgeFulfilled, applyPledgePayment } from "@/lib/finance/pledges";
+import {
+  isPledgeFulfilled,
+  applyPledgePayment,
+  pledgeStatusAfterReversal,
+} from "@/lib/finance/pledges";
 import { Prisma } from "@prisma/client";
 
 describe("pledges helper", () => {
@@ -96,18 +100,13 @@ describe("pledges helper", () => {
             amountPaid: new Prisma.Decimal(6000),
             status: "ACTIVE",
           }),
-          update: vi
-            .fn()
-            .mockResolvedValueOnce({
-              id: "p1",
-              amount: new Prisma.Decimal(10000),
-              amountPaid: new Prisma.Decimal(10000),
-              status: "ACTIVE",
-            })
-            .mockResolvedValueOnce({
-              id: "p1",
-              status: "FULFILLED",
-            }),
+          updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+          findUniqueOrThrow: vi.fn().mockResolvedValue({
+            id: "p1",
+            amount: new Prisma.Decimal(10000),
+            amountPaid: new Prisma.Decimal(10000),
+            status: "ACTIVE",
+          }),
         },
       };
 
@@ -117,11 +116,46 @@ describe("pledges helper", () => {
         amount: 4000,
       });
 
-      expect(mockTx.pledge.update).toHaveBeenCalledWith({
-        where: { id: "p1" },
+      // Increment is guarded so a concurrently cancelled pledge is not credited
+      expect(mockTx.pledge.updateMany).toHaveBeenNthCalledWith(1, {
+        where: { id: "p1", memberId: "m1", status: { in: ["ACTIVE", "OVERDUE"] } },
         data: { amountPaid: { increment: new Prisma.Decimal(4000) } },
       });
+      expect(mockTx.pledge.updateMany).toHaveBeenNthCalledWith(2, {
+        where: { id: "p1", status: { in: ["ACTIVE", "OVERDUE"] } },
+        data: { status: "FULFILLED" },
+      });
       expect(result.status).toBe("FULFILLED");
+    });
+
+    it("fails when the pledge was closed between the check and the increment", async () => {
+      const mockTx: any = {
+        pledge: {
+          findFirst: vi.fn().mockResolvedValue({ id: "p1", memberId: "m1", status: "ACTIVE" }),
+          updateMany: vi.fn().mockResolvedValue({ count: 0 }),
+        },
+      };
+
+      await expect(
+        applyPledgePayment(mockTx, { pledgeId: "p1", memberId: "m1", amount: 100 }),
+      ).rejects.toThrow("Pledge is no longer open for payments");
+    });
+  });
+
+  describe("pledgeStatusAfterReversal", () => {
+    const D = (n: number) => new Prisma.Decimal(n);
+
+    it("never resurrects a cancelled pledge", () => {
+      expect(pledgeStatusAfterReversal("CANCELLED", D(0), D(1000))).toBe("CANCELLED");
+    });
+
+    it("reopens a fulfilled pledge only when it is no longer covered", () => {
+      expect(pledgeStatusAfterReversal("FULFILLED", D(500), D(1000))).toBe("ACTIVE");
+      expect(pledgeStatusAfterReversal("FULFILLED", D(1200), D(1000))).toBe("FULFILLED");
+    });
+
+    it("keeps open pledges as they are", () => {
+      expect(pledgeStatusAfterReversal("ACTIVE", D(0), D(1000))).toBe("ACTIVE");
     });
   });
 });

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
+import { pledgeStatusAfterReversal } from "@/lib/finance/pledges";
 
 /**
  * Ensures any query for active financial transactions strictly excludes voided transactions.
@@ -19,13 +20,20 @@ export interface VoidTransactionResult {
   error?: string;
 }
 
+/** Errors whose message is safe to show to the finance user. */
+class VoidTransactionError extends Error {}
+
 /**
  * Voids a financial transaction.
  *
  * Rules:
  * 1. Restricted to FINANCE, ADMIN, SUPER_ADMIN.
- * 2. If already voided, fails.
- * 3. Reverses any associated pledge payment (decrements amountPaid, resets status to ACTIVE if was FULFILLED).
+ * 2. If already voided, fails (enforced by a conditional update, so concurrent
+ *    voids cannot both succeed and double-reverse a pledge).
+ * 3. Reverses the pledge payment only if it was actually applied (pledge + member
+ *    were both set when recorded). amountPaid is decremented atomically; a
+ *    CANCELLED pledge stays CANCELLED and a FULFILLED pledge reopens only if it is
+ *    no longer covered.
  * 4. Marks voidedAt, voidedById, voidReason.
  * 5. The receipt number stays assigned to preserve audit sequence integrity.
  * 6. Creates an audit log entry.
@@ -39,49 +47,60 @@ export async function voidTransaction(
   if (!trimmedReason) {
     return { success: false, error: "A reason is required to void a transaction" };
   }
+  if (trimmedReason.length > 500) {
+    return { success: false, error: "Reason must be at most 500 characters" };
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
       const transaction = await tx.financialTransaction.findUnique({
         where: { id },
-        include: { pledge: true },
+        select: {
+          amount: true,
+          type: true,
+          receiptNumber: true,
+          pledgeId: true,
+          memberId: true,
+        },
       });
 
       if (!transaction) {
-        throw new Error("Transaction not found");
+        throw new VoidTransactionError("Transaction not found");
       }
 
-      if (transaction.voidedAt) {
-        throw new Error("Transaction is already voided");
-      }
-
-      // Reverse pledge payment if linked
-      if (transaction.pledgeId) {
-        const pledge = transaction.pledge;
-        if (pledge) {
-          const newAmountPaid = Prisma.Decimal.max(
-            0,
-            pledge.amountPaid.minus(transaction.amount),
-          );
-          await tx.pledge.update({
-            where: { id: transaction.pledgeId },
-            data: {
-              amountPaid: newAmountPaid,
-              status: "ACTIVE",
-            },
-          });
-        }
-      }
-
-      // Mark transaction as voided
-      await tx.financialTransaction.update({
-        where: { id },
+      // Conditional update: only one concurrent void can win
+      const marked = await tx.financialTransaction.updateMany({
+        where: { id, voidedAt: null },
         data: {
           voidedAt: new Date(),
           voidedById: session.user.id,
           voidReason: trimmedReason,
         },
       });
+      if (marked.count === 0) {
+        throw new VoidTransactionError("Transaction is already voided");
+      }
+
+      // Reverse pledge payment only if recordTransaction applied it
+      if (transaction.pledgeId && transaction.memberId) {
+        let pledge = await tx.pledge.update({
+          where: { id: transaction.pledgeId },
+          data: { amountPaid: { decrement: transaction.amount } },
+        });
+        if (pledge.amountPaid.lt(0)) {
+          pledge = await tx.pledge.update({
+            where: { id: pledge.id },
+            data: { amountPaid: 0 },
+          });
+        }
+        const nextStatus = pledgeStatusAfterReversal(pledge.status, pledge.amountPaid, pledge.amount);
+        if (nextStatus !== pledge.status) {
+          await tx.pledge.update({
+            where: { id: pledge.id },
+            data: { status: nextStatus },
+          });
+        }
+      }
 
       // Audit log
       await tx.auditLog.create({
@@ -103,62 +122,10 @@ export async function voidTransaction(
 
     return { success: true };
   } catch (err: unknown) {
+    if (err instanceof VoidTransactionError) {
+      return { success: false, error: err.message };
+    }
     console.error("voidTransaction error:", err);
-    const message = err instanceof Error ? err.message : "Failed to void transaction";
-    return { success: false, error: message };
+    return { success: false, error: "Failed to void transaction" };
   }
-}
-
-/**
- * Updates non-money metadata fields on a transaction.
- * Amounts, currencies, and types are immutable and cannot be changed here (must be voided and re-recorded).
- */
-export async function updateTransactionDetails(
-  id: string,
-  details: {
-    notes?: string | null;
-    referenceNumber?: string | null;
-  },
-) {
-  const session = await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
-
-  const transaction = await prisma.financialTransaction.findUnique({
-    where: { id },
-  });
-
-  if (!transaction) {
-    throw new Error("Transaction not found");
-  }
-
-  if (transaction.voidedAt) {
-    throw new Error("Cannot edit details of a voided transaction");
-  }
-
-  const updated = await prisma.financialTransaction.update({
-    where: { id },
-    data: {
-      notes: details.notes !== undefined ? details.notes : transaction.notes,
-      referenceNumber:
-        details.referenceNumber !== undefined
-          ? details.referenceNumber
-          : transaction.referenceNumber,
-    },
-  });
-
-  await prisma.auditLog.create({
-    data: {
-      action: "UPDATE_TRANSACTION_DETAILS",
-      entity: "FinancialTransaction",
-      entityId: id,
-      userId: session.user.id,
-      details: JSON.stringify({
-        previousNotes: transaction.notes,
-        newNotes: details.notes,
-        previousRef: transaction.referenceNumber,
-        newRef: details.referenceNumber,
-      }),
-    },
-  });
-
-  return updated;
 }

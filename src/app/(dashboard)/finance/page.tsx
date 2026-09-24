@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { StatCard } from "@/components/shared/stat-card";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -21,17 +21,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { startOfLagosMonth, startOfLagosYear } from "@/lib/tz";
 
 export const metadata: Metadata = {
   title: "Finance Dashboard",
 };
 
 export default async function FinanceDashboardPage() {
-  await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const startOfMonth = startOfLagosMonth(now);
+  const startOfYear = startOfLagosYear(now);
 
   const [monthIncome, monthExpense, yearIncome, yearExpense, recentTransactions] =
     await Promise.all([
@@ -52,6 +53,7 @@ export default async function FinanceDashboardPage() {
         _sum: { amount: true },
       }),
       prisma.financialTransaction.findMany({
+        where: { voidedAt: null },
         orderBy: { createdAt: "desc" },
         take: 15,
         include: {

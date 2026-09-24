@@ -9,10 +9,12 @@ import {
   departmentSchema,
   liveStreamSchema,
 } from "@/lib/validations/content";
+import { galleryImageSchema } from "@/lib/validations/media";
+import { writeAuditLog } from "@/lib/audit";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { revalidateBlogPost, revalidateEvent, revalidateSermon } from "@/lib/revalidate";
+import { revalidateBlogPost, revalidateEvent, revalidateSermon, revalidateGallery } from "@/lib/revalidate";
 import { deleteOwnedBlobs } from "@/lib/uploads/cleanup";
 
 // ============================================================
@@ -60,7 +62,7 @@ export async function createBlogPost(formData: FormData) {
         title: data.title.trim(),
         slug,
         content: sanitizeHtml(data.content),
-        excerpt: data.excerpt ? sanitizeHtml(data.excerpt) : null,
+        excerpt: data.excerpt?.trim() || null,
         type: data.type as "BLOG" | "ANNOUNCEMENT" | "NEWS",
         featuredImage: data.featuredImage || null,
         published: isPublished,
@@ -116,7 +118,7 @@ export async function updateBlogPost(id: string, formData: FormData) {
       data: {
         title: data.title.trim(),
         content: sanitizeHtml(data.content),
-        excerpt: data.excerpt ? sanitizeHtml(data.excerpt) : null,
+        excerpt: data.excerpt?.trim() || null,
         type: data.type as "BLOG" | "ANNOUNCEMENT" | "NEWS",
         featuredImage: newImage,
         published: isPublished,
@@ -133,15 +135,22 @@ export async function updateBlogPost(id: string, formData: FormData) {
 }
 
 export async function deleteBlogPost(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
     const deleted = await prisma.blogPost.delete({ where: { id } });
+    await writeAuditLog({
+      action: "DELETE_BLOG_POST",
+      entity: "BlogPost",
+      entityId: id,
+      userId: session.user.id,
+      details: { title: deleted.title, slug: deleted.slug },
+    });
     if (deleted.featuredImage) {
       after(async () => {
         await deleteOwnedBlobs([deleted.featuredImage]);
       });
     }
-    revalidateBlogPost("");
+    revalidateBlogPost(deleted.slug);
     return { success: true };
   } catch (err) {
     console.error("deleteBlogPost error:", err);
@@ -175,12 +184,12 @@ export async function createEvent(formData: FormData) {
   const data = parsed.data;
 
   try {
-    await prisma.event.create({
+    const created = await prisma.event.create({
       data: {
         title: data.title.trim(),
-        description: data.description ? sanitizeHtml(data.description) : null,
-        startDate: new Date(data.startDate),
-        endDate: data.endDate ? new Date(data.endDate) : null,
+        description: data.description?.trim() || null,
+        startDate: data.startDate,
+        endDate: data.endDate,
         location: data.location || "AG Wuse, 53 Accra Street, Wuse Zone 5",
         type: data.type as "SERVICE" | "REVIVAL" | "CONFERENCE" | "OUTREACH" | "HARVEST" | "OTHER",
         imageUrl: data.imageUrl || null,
@@ -189,7 +198,7 @@ export async function createEvent(formData: FormData) {
       },
     });
 
-    revalidateEvent("new");
+    revalidateEvent(created.id);
     return { success: true };
   } catch (err) {
     console.error("createEvent error:", err);
@@ -236,9 +245,9 @@ export async function updateEvent(id: string, formData: FormData) {
       where: { id },
       data: {
         title: data.title.trim(),
-        description: data.description ? sanitizeHtml(data.description) : null,
-        startDate: new Date(data.startDate),
-        endDate: data.endDate ? new Date(data.endDate) : null,
+        description: data.description?.trim() || null,
+        startDate: data.startDate,
+        endDate: data.endDate,
         location: data.location || "AG Wuse, 53 Accra Street, Wuse Zone 5",
         type: data.type as "SERVICE" | "REVIVAL" | "CONFERENCE" | "OUTREACH" | "HARVEST" | "OTHER",
         imageUrl: newImage,
@@ -255,9 +264,16 @@ export async function updateEvent(id: string, formData: FormData) {
 }
 
 export async function deleteEvent(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
     const deleted = await prisma.event.delete({ where: { id } });
+    await writeAuditLog({
+      action: "DELETE_EVENT",
+      entity: "Event",
+      entityId: id,
+      userId: session.user.id,
+      details: { title: deleted.title },
+    });
     if (deleted.imageUrl) {
       after(async () => {
         await deleteOwnedBlobs([deleted.imageUrl]);
@@ -278,29 +294,26 @@ export async function deleteEvent(id: string) {
 export async function createGalleryImage(formData: FormData) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
-  const url = formData.get("url") as string;
-  const caption = (formData.get("caption") as string) || null;
-  const albumName = (formData.get("albumName") as string) || null;
-
-  if (!url) {
-    return { success: false, error: "Image URL is required" };
+  const parsed = galleryImageSchema.safeParse({
+    imageUrl: (formData.get("url") as string) ?? "",
+    caption: (formData.get("caption") as string) || null,
+    albumName: (formData.get("albumName") as string) || null,
+  });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message };
   }
-
-  if (!url.startsWith("https://")) {
-    return { success: false, error: "Image URL must use HTTPS" };
-  }
+  const { imageUrl, caption, albumName } = parsed.data;
 
   try {
     await prisma.galleryImage.create({
       data: {
-        url,
+        url: imageUrl,
         caption: caption ? caption.trim() : null,
         albumName: albumName ? albumName.trim() : null,
       },
     });
 
-    revalidatePath("/admin/content/gallery");
-    revalidatePath("/gallery");
+    revalidateGallery();
     return { success: true };
   } catch (err) {
     console.error("createGalleryImage error:", err);
@@ -309,16 +322,22 @@ export async function createGalleryImage(formData: FormData) {
 }
 
 export async function deleteGalleryImage(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
     const deleted = await prisma.galleryImage.delete({ where: { id } });
+    await writeAuditLog({
+      action: "DELETE_GALLERY_IMAGE",
+      entity: "GalleryImage",
+      entityId: id,
+      userId: session.user.id,
+      details: { url: deleted.url, caption: deleted.caption },
+    });
     if (deleted.url) {
       after(async () => {
         await deleteOwnedBlobs([deleted.url, deleted.thumbnailUrl]);
       });
     }
-    revalidatePath("/admin/content/gallery");
-    revalidatePath("/gallery");
+    revalidateGallery();
     return { success: true };
   } catch (err) {
     console.error("deleteGalleryImage error:", err);
@@ -355,7 +374,7 @@ export async function createSermon(formData: FormData) {
       data: {
         title: data.title.trim(),
         speaker: data.speaker.trim(),
-        description: data.description ? sanitizeHtml(data.description) : null,
+        description: data.description?.trim() || null,
         date: new Date(data.date),
         audioUrl: data.audioUrl || null,
         videoUrl: data.videoUrl || null,
@@ -410,7 +429,7 @@ export async function updateSermon(id: string, formData: FormData) {
       data: {
         title: data.title.trim(),
         speaker: data.speaker.trim(),
-        description: data.description ? sanitizeHtml(data.description) : null,
+        description: data.description?.trim() || null,
         date: new Date(data.date),
         audioUrl: newAudio,
         videoUrl: data.videoUrl || null,
@@ -427,9 +446,16 @@ export async function updateSermon(id: string, formData: FormData) {
 }
 
 export async function deleteSermon(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
     const deleted = await prisma.sermon.delete({ where: { id } });
+    await writeAuditLog({
+      action: "DELETE_SERMON",
+      entity: "Sermon",
+      entityId: id,
+      userId: session.user.id,
+      details: { title: deleted.title, speaker: deleted.speaker },
+    });
     if (deleted.audioUrl) {
       after(async () => {
         await deleteOwnedBlobs([deleted.audioUrl]);
@@ -452,7 +478,8 @@ export async function approveSubmission(id: string) {
   try {
     await prisma.submission.update({
       where: { id },
-      data: { status: "APPROVED", isPublic: true },
+      // Respect the submitter's choice: approval never makes a private submission public.
+      data: { status: "APPROVED" },
     });
     revalidatePath("/admin/content/moderation");
     revalidatePath("/testimony");
@@ -471,6 +498,7 @@ export async function archiveSubmission(id: string) {
       data: { status: "ARCHIVED" },
     });
     revalidatePath("/admin/content/moderation");
+    revalidatePath("/testimony");
     return { success: true };
   } catch (err) {
     console.error("archiveSubmission error:", err);
@@ -503,7 +531,7 @@ export async function createDepartment(formData: FormData) {
     await prisma.department.create({
       data: {
         name: data.name.trim(),
-        description: data.description ? sanitizeHtml(data.description) : null,
+        description: data.description?.trim() || null,
         category: data.category as "MINISTRY" | "COMMITTEE" | "CHOIR" | "OUTREACH",
         leaderId: data.leaderId || null,
       },
@@ -542,7 +570,7 @@ export async function updateDepartment(id: string, formData: FormData) {
       where: { id },
       data: {
         name: data.name.trim(),
-        description: data.description ? sanitizeHtml(data.description) : null,
+        description: data.description?.trim() || null,
         category: data.category as "MINISTRY" | "COMMITTEE" | "CHOIR" | "OUTREACH",
         leaderId: data.leaderId || null,
         isActive: data.isActive ?? true,
@@ -582,43 +610,6 @@ export async function deleteDepartment(id: string) {
 }
 
 // ============================================================
-// CHURCH SETTINGS
-// ============================================================
-
-const ALLOWED_SETTING_KEYS = new Set([
-  "church_name",
-  "church_short_name",
-  "church_address",
-  "church_phones",
-  "church_email",
-  "church_tagline",
-  "bank_name",
-  "bank_account",
-  "service_times",
-]);
-
-export async function updateChurchSetting(key: string, value: string) {
-  await requireRole(["SUPER_ADMIN"]);
-
-  if (!ALLOWED_SETTING_KEYS.has(key)) {
-    return { success: false, error: `Invalid setting key: ${key}` };
-  }
-
-  try {
-    await prisma.churchSettings.upsert({
-      where: { key },
-      create: { key, value },
-      update: { value },
-    });
-    revalidatePath("/admin/settings");
-    return { success: true };
-  } catch (err) {
-    console.error("updateChurchSetting error:", err);
-    return { success: false, error: "Failed to update church setting." };
-  }
-}
-
-// ============================================================
 // LIVE STREAM
 // ============================================================
 
@@ -642,14 +633,14 @@ export async function updateLiveStreamConfig(formData: FormData) {
         facebookUrl: data.facebookUrl || null,
         isLive: data.isLive === "on",
         title: data.title ? data.title.trim() : null,
-        description: data.description ? sanitizeHtml(data.description) : null,
+        description: data.description?.trim() || null,
       },
       update: {
         youtubeUrl: data.youtubeUrl || null,
         facebookUrl: data.facebookUrl || null,
         isLive: data.isLive === "on",
         title: data.title ? data.title.trim() : null,
-        description: data.description ? sanitizeHtml(data.description) : null,
+        description: data.description?.trim() || null,
       },
     });
 

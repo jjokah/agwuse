@@ -42,6 +42,14 @@ export const PUBLIC_OFFERING_CATEGORIES = [
   "OTHER",
 ] as const;
 
+/**
+ * Display label for an expense's category. Expenses keep the FinancialCategory
+ * name in customCategory (their enum category is always GENERAL).
+ */
+export function expenseCategoryLabel(customCategory: string | null | undefined): string {
+  return customCategory?.trim() || "Uncategorized";
+}
+
 // ---- Payment methods ----
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CASH: "Cash",

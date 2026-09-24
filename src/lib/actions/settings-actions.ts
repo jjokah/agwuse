@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { auditLog } from "@/lib/actions/admin-actions";
+import { writeAuditLog } from "@/lib/audit";
 import { revalidatePath } from "next/cache";
 import {
   churchSettingsSchema,
@@ -48,6 +48,14 @@ export async function updateChurchSettingsAction(
     const keys = Object.keys(validData) as ChurchSettingsKey[];
 
     await prisma.$transaction(async (tx) => {
+      // Record before/after values so the audit trail shows what actually changed
+      // (e.g. a bank account number edit), not just which keys were submitted.
+      const previousRows = await tx.churchSettings.findMany({ where: { key: { in: keys } } });
+      const previous = new Map(previousRows.map((r) => [r.key, r.value]));
+      const changed = keys
+        .map((key) => ({ key, from: previous.get(key) ?? null, to: JSON.stringify(validData[key]) }))
+        .filter((c) => c.from !== c.to);
+
       for (const key of keys) {
         const valueJson = JSON.stringify(validData[key]);
         await tx.churchSettings.upsert({
@@ -57,13 +65,16 @@ export async function updateChurchSettingsAction(
         });
       }
 
-      await auditLog({
-        action: "UPDATE",
-        entity: "ChurchSettings",
-        entityId: "settings",
-        details: `Church settings updated: ${keys.join(", ")}`,
-        userId: sessionUser.user.id,
-      });
+      await writeAuditLog(
+        {
+          action: "UPDATE_SETTINGS",
+          entity: "ChurchSettings",
+          entityId: "settings",
+          details: { changedKeys: changed.map((c) => c.key), changes: changed },
+          userId: sessionUser.user.id,
+        },
+        tx,
+      );
     });
 
     revalidatePath("/", "layout");

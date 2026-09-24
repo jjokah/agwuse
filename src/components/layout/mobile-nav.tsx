@@ -13,12 +13,12 @@ import { Separator } from "@/components/ui/separator";
 import { NAV_ITEMS, CHURCH_INFO } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
-import type { ChurchInfo } from "@/lib/settings/schema";
+import type { PublicChurchInfo } from "@/lib/settings/schema";
 
 interface MobileNavProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  churchInfo?: Partial<ChurchInfo>;
+  churchInfo?: Partial<PublicChurchInfo>;
 }
 
 export function MobileNav({ open, onOpenChange, churchInfo }: MobileNavProps) {

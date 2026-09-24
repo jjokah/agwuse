@@ -13,10 +13,13 @@ export async function voidTransactionAction(
     return { success: false, error: result.error || "Failed to void transaction" };
   }
 
+  revalidatePath("/admin");
   revalidatePath("/admin/finance/transactions");
   revalidatePath("/admin/finance");
-  revalidatePath("/finance");
+  revalidatePath("/admin/finance/pledges", "layout");
+  revalidatePath("/finance", "layout");
   revalidatePath("/my-giving");
+  revalidatePath("/dashboard");
 
   return { success: true };
 }

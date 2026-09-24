@@ -17,13 +17,13 @@ import { NAV_ITEMS, CHURCH_INFO } from "@/lib/constants";
 import { MobileNav } from "./mobile-nav";
 import { useState } from "react";
 
-import type { ChurchInfo } from "@/lib/settings/schema";
+import type { PublicChurchInfo } from "@/lib/settings/schema";
 
 const triggerClass =
   "bg-transparent text-[13px] font-medium uppercase tracking-wide text-ink hover:text-gold-deep data-[state=open]:text-gold-deep";
 
 interface PublicHeaderProps {
-  churchInfo?: Partial<ChurchInfo>;
+  churchInfo?: Partial<PublicChurchInfo>;
 }
 
 export function PublicHeader({ churchInfo }: PublicHeaderProps) {

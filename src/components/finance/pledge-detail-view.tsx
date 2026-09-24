@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { CancelPledgeButton } from "./cancel-pledge-button";
+import { PAYMENT_METHOD_LABELS } from "@/lib/finance/labels";
 import type { Pledge, User, FinancialTransaction } from "@prisma/client";
 
 interface PledgeDetailViewProps {
@@ -157,7 +158,7 @@ export function PledgeDetailView({ pledge, backPath }: PledgeDetailViewProps) {
                       <TableCell className="font-mono text-xs">
                         {tx.receiptNumber || "—"}
                       </TableCell>
-                      <TableCell>{tx.paymentMethod.replace("_", " ")}</TableCell>
+                      <TableCell>{PAYMENT_METHOD_LABELS[tx.paymentMethod] ?? tx.paymentMethod}</TableCell>
                       <TableCell className="text-right font-semibold">
                         {formatCurrency(Number(tx.amount))}
                       </TableCell>

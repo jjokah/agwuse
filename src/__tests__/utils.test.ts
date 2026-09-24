@@ -39,8 +39,13 @@ describe("Utility Functions", () => {
 
   describe("formatDate", () => {
     it("formats valid Date objects", () => {
-      const date = new Date(2026, 0, 15);
+      const date = new Date("2026-01-15T00:00:00Z"); // date-only values are stored at UTC midnight
       expect(formatDate(date)).toBe("Jan 15, 2026");
+    });
+
+    it("uses church (Africa/Lagos) time, not the server's zone", () => {
+      // 23:30 UTC on Dec 31 is already 00:30 on Jan 1 in Lagos
+      expect(formatDate(new Date("2026-12-31T23:30:00Z"))).toBe("Jan 1, 2027");
     });
 
     it("formats ISO date strings", () => {
@@ -59,7 +64,7 @@ describe("Utility Functions", () => {
 
   describe("formatDateTime", () => {
     it("formats date and time together", () => {
-      const date = new Date(2026, 4, 10, 14, 30);
+      const date = new Date("2026-05-10T13:30:00Z"); // 2:30 PM in Lagos (UTC+1)
       const result = formatDateTime(date);
       expect(result).toContain("May 10, 2026");
       expect(result).toContain("2:30 PM");

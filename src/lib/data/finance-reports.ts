@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { expenseCategoryLabel } from "@/lib/finance/labels";
 
 export interface IncomeBreakdownItem {
   type: string;
@@ -8,6 +9,7 @@ export interface IncomeBreakdownItem {
 }
 
 export interface ExpenseBreakdownItem {
+  /** Display label of the expense category (from FinancialCategory.name). */
   category: string;
   total: Prisma.Decimal;
   count: number;
@@ -81,9 +83,9 @@ export async function getFinanceReportData(
       _count: true,
       orderBy: { _sum: { amount: "desc" } },
     }),
-    // 4. Expense grouped by category
+    // 4. Expense grouped by their real category (stored in customCategory)
     prisma.financialTransaction.groupBy({
-      by: ["category"],
+      by: ["customCategory"],
       where: { ...dateFilter, type: "EXPENSE" },
       _sum: { amount: true },
       _count: true,
@@ -98,6 +100,7 @@ export async function getFinanceReportData(
         receiptNumber: true,
         type: true,
         category: true,
+        customCategory: true,
         amount: true,
         paymentMethod: true,
         notes: true,
@@ -119,11 +122,19 @@ export async function getFinanceReportData(
     count: g._count,
   }));
 
-  const expenseByCategory: ExpenseBreakdownItem[] = expenseGroups.map((g) => ({
-    category: g.category ?? "GENERAL",
-    total: g._sum.amount ?? new Prisma.Decimal(0),
-    count: g._count,
-  }));
+  // Merge null and blank categories into one "Uncategorized" bucket
+  const expenseMap = new Map<string, ExpenseBreakdownItem>();
+  for (const g of expenseGroups) {
+    const label = expenseCategoryLabel(g.customCategory);
+    const prev = expenseMap.get(label);
+    const total = g._sum.amount ?? new Prisma.Decimal(0);
+    expenseMap.set(label, {
+      category: label,
+      total: prev ? prev.total.plus(total) : total,
+      count: (prev?.count ?? 0) + g._count,
+    });
+  }
+  const expenseByCategory = [...expenseMap.values()].sort((a, b) => b.total.comparedTo(a.total));
 
   return {
     from: fromDate,

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { MemberCombobox } from "@/components/shared/member-combobox";
 import { createPledge } from "@/lib/actions/finance-actions";
 import { toast } from "sonner";
+import { toLagosDateString } from "@/lib/tz";
 
 interface PledgeFormProps {
   redirectPath?: string;
@@ -45,7 +46,7 @@ export function PledgeForm({ redirectPath = "/admin/finance/pledges" }: PledgeFo
     }
   }
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const todayStr = toLagosDateString();
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">

@@ -16,6 +16,7 @@ import {
 import { createEvent, updateEvent } from "@/lib/actions/content-actions";
 import { ImageUpload } from "@/components/shared/image-upload";
 import { toast } from "sonner";
+import { toLagosDateTimeInputValue } from "@/lib/tz";
 
 interface EventFormProps {
   event?: {
@@ -40,8 +41,9 @@ const EVENT_TYPES = [
   { value: "OTHER", label: "Other" },
 ];
 
+/** datetime-local values are Africa/Lagos wall-clock time (see src/lib/tz.ts). */
 function toDateInputValue(d: Date): string {
-  return new Date(d).toISOString().slice(0, 16);
+  return toLagosDateTimeInputValue(new Date(d));
 }
 
 export function EventForm({ event }: EventFormProps) {

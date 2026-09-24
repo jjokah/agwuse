@@ -18,6 +18,7 @@ import { MemberCombobox } from "@/components/shared/member-combobox";
 import type { MemberSearchResult } from "@/lib/actions/member-search-actions";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
+import { toLagosDateString } from "@/lib/tz";
 
 export interface TransactionFormProps {
   categories: { id: string; name: string; type: string }[];
@@ -189,7 +190,7 @@ export function TransactionForm({
             name="date"
             type="date"
             required
-            defaultValue={new Date().toISOString().split("T")[0]}
+            defaultValue={toLagosDateString()}
           />
         </div>
       </div>

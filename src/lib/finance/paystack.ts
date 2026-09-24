@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { recordTransaction } from "@/lib/finance/record-transaction";
+import { recordTransaction, scheduleReceiptEmail } from "@/lib/finance/record-transaction";
 import { isUniqueViolation } from "@/lib/prisma-errors";
 
 export interface PaystackPaymentData {
@@ -21,8 +21,8 @@ export type RecordPaystackResult =
  * Handles recording a verified Paystack payment idempotently.
  *
  * Rules:
- * 1. Non-NGN currency: audit and return ignored (200).
- * 2. If paystackRef already recorded: return already_processed (200).
+ * 1. If paystackRef already recorded: return already_processed (200).
+ * 2. Non-NGN currency: audit and return ignored (200).
  * 3. If PaymentIntent found:
  *    - Amount and currency must match. On mismatch, mark intent FAILED, audit, and return mismatch (200).
  *    - Type, category, and memberId come strictly from the intent.
@@ -33,13 +33,32 @@ export type RecordPaystackResult =
 export async function recordPaystackPayment(
   data: PaystackPaymentData,
 ): Promise<RecordPaystackResult> {
-  // Find system user (SUPER_ADMIN) for ledger recordedById & audit logging
-  const systemUser = await prisma.user.findFirst({
-    where: { role: "SUPER_ADMIN" },
-    select: { id: true },
-  });
+  const intentRef = (data.metadata?.intentRef as string) || data.reference;
+
+  // Independent lookups in parallel
+  const [systemUser, existing, intent] = await Promise.all([
+    // Deterministic system user (oldest active SUPER_ADMIN) for ledger recordedById & audit
+    prisma.user.findFirst({
+      where: { role: "SUPER_ADMIN", status: "ACTIVE" },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    }),
+    prisma.financialTransaction.findUnique({
+      where: { paystackRef: data.reference },
+      select: { receiptNumber: true },
+    }),
+    prisma.paymentIntent.findUnique({
+      where: { reference: intentRef },
+    }),
+  ]);
+
+  // Idempotency: already recorded
+  if (existing) {
+    return { status: "already_processed", receiptNumber: existing.receiptNumber };
+  }
+
   if (!systemUser) {
-    throw new Error("No system user found for Paystack recording");
+    throw new Error("No active SUPER_ADMIN found to attribute Paystack recording");
   }
 
   // 1. Currency check
@@ -55,21 +74,6 @@ export async function recordPaystackPayment(
     });
     return { status: "ignored", message: `Unsupported currency: ${data.currency}` };
   }
-
-  // 2. Idempotency check
-  const existing = await prisma.financialTransaction.findUnique({
-    where: { paystackRef: data.reference },
-    select: { id: true, receiptNumber: true },
-  });
-  if (existing) {
-    return { status: "already_processed", receiptNumber: existing.receiptNumber };
-  }
-
-  // 3. Resolve PaymentIntent
-  const intentRef = (data.metadata?.intentRef as string) || data.reference;
-  const intent = await prisma.paymentIntent.findUnique({
-    where: { reference: intentRef },
-  });
 
   try {
     if (intent) {
@@ -100,6 +104,8 @@ export async function recordPaystackPayment(
         return { status: "mismatch", message: "Amount or currency mismatch" };
       }
 
+      const donorEmail = data.customer?.email || intent.email;
+
       // Record transaction using authoritative intent fields
       const transaction = await prisma.$transaction(async (tx) => {
         const txn = await recordTransaction(tx, {
@@ -110,10 +116,9 @@ export async function recordPaystackPayment(
           paymentMethod: "ONLINE",
           paystackRef: data.reference,
           memberId: intent.memberId,
-          donorEmail: data.customer?.email || intent.email,
           date: data.paid_at ? new Date(data.paid_at) : new Date(),
           recordedById: systemUser.id,
-          notes: `Online payment via Paystack. Email: ${data.customer?.email || intent.email}`,
+          notes: `Online payment via Paystack. Email: ${donorEmail}`,
           auditAction: "PAYSTACK_PAYMENT",
         });
 
@@ -128,12 +133,15 @@ export async function recordPaystackPayment(
         return txn;
       });
 
+      // Only after commit
+      scheduleReceiptEmail(transaction, { donorEmail });
       return { status: "success", receiptNumber: transaction.receiptNumber };
     }
 
     // 4. No intent found — fallback to DONATION/GENERAL with PAYSTACK_UNMATCHED audit
+    const donorEmail = data.customer?.email || null;
     const transaction = await prisma.$transaction(async (tx) => {
-      const txn = await recordTransaction(tx, {
+      return recordTransaction(tx, {
         type: "DONATION",
         category: "GENERAL",
         amount: data.amount,
@@ -141,19 +149,23 @@ export async function recordPaystackPayment(
         paymentMethod: "ONLINE",
         paystackRef: data.reference,
         memberId: null,
-        donorEmail: data.customer?.email || null,
         date: data.paid_at ? new Date(data.paid_at) : new Date(),
         recordedById: systemUser.id,
-        notes: `Unmatched online payment via Paystack. Email: ${data.customer?.email || "N/A"}`,
+        notes: `Unmatched online payment via Paystack. Email: ${donorEmail || "N/A"}`,
         auditAction: "PAYSTACK_UNMATCHED",
       });
-      return txn;
     });
 
+    scheduleReceiptEmail(transaction, { donorEmail });
     return { status: "success", receiptNumber: transaction.receiptNumber };
   } catch (err: unknown) {
     if (isUniqueViolation(err)) {
-      return { status: "already_processed" };
+      // A concurrent writer (webhook vs. verify vs. return page) won the race
+      const winner = await prisma.financialTransaction.findUnique({
+        where: { paystackRef: data.reference },
+        select: { receiptNumber: true },
+      });
+      return { status: "already_processed", receiptNumber: winner?.receiptNumber ?? null };
     }
     throw err;
   }

@@ -9,15 +9,22 @@ import { Check, Archive } from "lucide-react";
 interface ModerationActionsProps {
   id: string;
   status: string;
+  isPublic: boolean;
 }
 
-export function ModerationActions({ id, status }: ModerationActionsProps) {
+export function ModerationActions({ id, status, isPublic }: ModerationActionsProps) {
   const router = useRouter();
 
   async function handleApprove() {
     try {
-      await approveSubmission(id);
-      toast.success("Submission approved");
+      const result = await approveSubmission(id);
+      if (!result.success) {
+        toast.error(result.error || "Failed to approve");
+        return;
+      }
+      toast.success(
+        isPublic ? "Submission approved and published" : "Submission approved (kept private)",
+      );
       router.refresh();
     } catch {
       toast.error("Failed to approve");
@@ -26,7 +33,11 @@ export function ModerationActions({ id, status }: ModerationActionsProps) {
 
   async function handleArchive() {
     try {
-      await archiveSubmission(id);
+      const result = await archiveSubmission(id);
+      if (!result.success) {
+        toast.error(result.error || "Failed to archive");
+        return;
+      }
       toast.success("Submission archived");
       router.refresh();
     } catch {

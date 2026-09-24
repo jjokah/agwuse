@@ -1,6 +1,9 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient, type PledgeStatus } from "@prisma/client";
 
 type PrismaTx = PrismaClient | Prisma.TransactionClient;
+
+/** Statuses that still accept payments. OVERDUE is display-only today but treated as open. */
+const OPEN_PLEDGE_STATUSES: PledgeStatus[] = ["ACTIVE", "OVERDUE"];
 
 export interface ApplyPledgePaymentResult {
   pledgeId: string;
@@ -19,12 +22,30 @@ export function isPledgeFulfilled(
 }
 
 /**
+ * Status a pledge should have after a payment is reversed (transaction voided).
+ * - CANCELLED stays CANCELLED (voiding must never resurrect a cancelled pledge).
+ * - FULFILLED drops back to ACTIVE only if the remaining paid amount no longer covers it.
+ * - Open pledges keep their status.
+ */
+export function pledgeStatusAfterReversal(
+  currentStatus: PledgeStatus,
+  amountPaid: Prisma.Decimal,
+  targetAmount: Prisma.Decimal,
+): PledgeStatus {
+  if (currentStatus === "FULFILLED") {
+    return isPledgeFulfilled(amountPaid, targetAmount) ? "FULFILLED" : "ACTIVE";
+  }
+  return currentStatus;
+}
+
+/**
  * Applies a payment amount to a member's pledge.
  * Verifies that:
  * 1. The pledge belongs to the given memberId.
  * 2. The pledge is not in CANCELLED or FULFILLED status.
  *
- * Increments amountPaid in the database and updates status to FULFILLED if amountPaid >= amount.
+ * The increment is guarded by a conditional update so a concurrent cancellation
+ * cannot be overwritten, and the pledge becomes FULFILLED once amountPaid >= amount.
  */
 export async function applyPledgePayment(
   tx: PrismaTx,
@@ -41,7 +62,7 @@ export async function applyPledgePayment(
     throw new Error("Pledge payment amount must be greater than zero");
   }
 
-  // Find pledge verifying ownership
+  // Find pledge verifying ownership (also gives precise error messages)
   const pledge = await tx.pledge.findFirst({
     where: { id: pledgeId, memberId },
   });
@@ -58,28 +79,29 @@ export async function applyPledgePayment(
     throw new Error("Cannot apply payment to an already fulfilled pledge");
   }
 
-  // Atomically increment amountPaid in database
-  const updated = await tx.pledge.update({
-    where: { id: pledgeId },
-    data: {
-      amountPaid: { increment: paymentAmount },
-    },
+  // Atomically increment amountPaid only while the pledge is still open
+  const incremented = await tx.pledge.updateMany({
+    where: { id: pledgeId, memberId, status: { in: OPEN_PLEDGE_STATUSES } },
+    data: { amountPaid: { increment: paymentAmount } },
   });
+  if (incremented.count === 0) {
+    throw new Error("Pledge is no longer open for payments");
+  }
 
-  // Calculate new status
-  const fulfilled = isPledgeFulfilled(updated.amountPaid, updated.amount);
-  const newStatus = fulfilled ? "FULFILLED" : updated.status;
+  const updated = await tx.pledge.findUniqueOrThrow({ where: { id: pledgeId } });
 
-  if (newStatus !== updated.status) {
-    await tx.pledge.update({
-      where: { id: pledgeId },
-      data: { status: newStatus },
+  let status = updated.status;
+  if (isPledgeFulfilled(updated.amountPaid, updated.amount)) {
+    const fulfilled = await tx.pledge.updateMany({
+      where: { id: pledgeId, status: { in: OPEN_PLEDGE_STATUSES } },
+      data: { status: "FULFILLED" },
     });
+    if (fulfilled.count > 0) status = "FULFILLED";
   }
 
   return {
     pledgeId: updated.id,
     amountPaid: updated.amountPaid,
-    status: newStatus as "ACTIVE" | "FULFILLED" | "OVERDUE",
+    status: status as "ACTIVE" | "FULFILLED" | "OVERDUE",
   };
 }

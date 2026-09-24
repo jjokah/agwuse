@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { parseDateRange } from "@/lib/date-params";
 import { getFinanceReportData } from "@/lib/data/finance-reports";
 import { ReportFilters } from "@/components/finance/report-filters";
 import { ReportTables } from "@/components/finance/report-tables";
 import { ExportButtons } from "@/components/finance/export-buttons";
+import { toLagosDateString } from "@/lib/tz";
 
 export const metadata: Metadata = {
   title: "Finance Reports",
@@ -19,14 +20,14 @@ export default async function FinanceReportsPage({
     report?: string;
   }>;
 }) {
-  await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
   const { from, to, report } = await searchParams;
 
   const { from: fromDate, to: toDate } = parseDateRange({ from, to });
   const data = await getFinanceReportData(fromDate, toDate);
 
-  const fromStr = fromDate.toISOString().split("T")[0];
-  const toStr = toDate.toISOString().split("T")[0];
+  const fromStr = toLagosDateString(fromDate);
+  const toStr = toLagosDateString(toDate);
   const reportType = report || "summary";
 
   return (

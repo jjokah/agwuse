@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +39,7 @@ export default async function ModerationPage({
 }: {
   searchParams: Promise<{ status?: string; type?: string; page?: string; pageSize?: string }>;
 }) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
   const params = await searchParams;
   const { status, type } = params;
   const { page, pageSize, skip, take } = parsePageParams(params);
@@ -135,12 +135,18 @@ export default async function ModerationPage({
                       >
                         {sub.status}
                       </Badge>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {sub.isPublic
+                          ? "Public if approved"
+                          : "Private (never published)"}
+                      </p>
                     </TableCell>
                     <TableCell>{formatDate(sub.createdAt)}</TableCell>
                     <TableCell>
                       <ModerationActions
                         id={sub.id}
                         status={sub.status}
+                        isPublic={sub.isPublic}
                       />
                     </TableCell>
                   </TableRow>

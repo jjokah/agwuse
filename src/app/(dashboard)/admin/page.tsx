@@ -1,20 +1,21 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/prisma";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { StatCard } from "@/components/shared/stat-card";
 import { formatCurrency } from "@/lib/utils";
 import { Users, UserPlus, Wallet, Clock } from "lucide-react";
+import { startOfLagosMonth, startOfLagosYear } from "@/lib/tz";
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
 };
 
 export default async function AdminDashboardPage() {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const startOfMonth = startOfLagosMonth(now);
+  const startOfYear = startOfLagosYear(now);
 
   const [
     totalMembers,
@@ -51,6 +52,7 @@ export default async function AdminDashboardPage() {
       },
     }),
     prisma.financialTransaction.findMany({
+      where: { voidedAt: null },
       orderBy: { createdAt: "desc" },
       take: 5,
       include: { member: { select: { firstName: true, lastName: true } } },
