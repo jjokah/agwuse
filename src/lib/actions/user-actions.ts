@@ -2,15 +2,23 @@
 
 import { hash, compare } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { revokeSessions } from "@/lib/authz/revoke";
+import { writeAuditLog } from "@/lib/audit";
+import { isOwnedAvatarUrl } from "@/lib/uploads/policy";
 import { updateProfileSchema, changePasswordSchema } from "@/lib/validations/user";
 import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
 import { after } from "next/server";
 import { deleteOwnedBlobs } from "@/lib/uploads/cleanup";
 
 export async function updateProfile(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  let session;
+  try {
+    session = await requireAuth();
+  } catch {
+    return { success: false, error: "Unauthorized" };
+  }
+  const userId = session.user.id;
 
   const raw = {
     firstName: formData.get("firstName") as string,
@@ -23,7 +31,9 @@ export async function updateProfile(formData: FormData) {
     maritalStatus: (formData.get("maritalStatus") as string) || undefined,
   };
 
-  const image = (formData.get("image") as string) || (formData.get("profilePhoto") as string) || undefined;
+  // `null` = field not submitted (keep current photo); "" = photo removed.
+  const imageField = formData.get("image");
+  const submittedImage = typeof imageField === "string" ? imageField.trim() : null;
 
   const parsed = updateProfileSchema.safeParse(raw);
   if (!parsed.success) {
@@ -34,19 +44,29 @@ export async function updateProfile(formData: FormData) {
 
   try {
     const existing = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: userId },
       select: { image: true, profilePhoto: true },
     });
+    const oldImage = existing?.image || existing?.profilePhoto || null;
 
-    const oldImage = existing?.image || existing?.profilePhoto;
-    if (oldImage && image && oldImage !== image) {
-      after(async () => {
-        await deleteOwnedBlobs([oldImage]);
-      });
+    let nextImage = oldImage;
+    if (submittedImage !== null && submittedImage !== oldImage) {
+      // Only the user's own uploaded avatars may be stored; this also prevents
+      // pointing at (and later deleting) someone else's blob.
+      if (submittedImage && !isOwnedAvatarUrl(submittedImage, userId)) {
+        return { success: false, error: "Please upload your profile photo using the upload button." };
+      }
+      nextImage = submittedImage || null;
+
+      if (oldImage && isOwnedAvatarUrl(oldImage, userId)) {
+        after(async () => {
+          await deleteOwnedBlobs([oldImage]);
+        });
+      }
     }
 
     await prisma.user.update({
-      where: { id: session.user.id },
+      where: { id: userId },
       data: {
         firstName,
         lastName,
@@ -57,8 +77,8 @@ export async function updateProfile(formData: FormData) {
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         gender: (gender as "MALE" | "FEMALE") || null,
         maritalStatus: (maritalStatus as "SINGLE" | "MARRIED" | "WIDOWED" | "DIVORCED") || null,
-        image: image || existing?.image || null,
-        profilePhoto: image || existing?.profilePhoto || null,
+        image: nextImage,
+        profilePhoto: nextImage,
       },
     });
 
@@ -70,11 +90,16 @@ export async function updateProfile(formData: FormData) {
 }
 
 export async function changePassword(formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Unauthorized" };
+  let session;
+  try {
+    session = await requireAuth();
+  } catch {
+    return { success: false, error: "Unauthorized" };
+  }
 
+  // Throttle per account as well as per IP (guessing the current password)
   const ip = await getClientIp();
-  const limitCheck = await checkRateLimit("user_change_password", ip, 5, "60 s");
+  const limitCheck = await checkRateLimit("user_change_password", `${session.user.id}:${ip}`, 5, "15 m", 15 * 60_000);
   if (!limitCheck.success) {
     return { success: false, error: limitCheck.error };
   }
@@ -106,9 +131,18 @@ export async function changePassword(formData: FormData) {
     }
 
     const passwordHash = await hash(parsed.data.newPassword, 12);
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { passwordHash },
+    const userId = session.user.id;
+    // Sign out every session (including this one) so a stolen session can't outlive the change
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash },
+      });
+      await revokeSessions(tx, userId);
+      await writeAuditLog(
+        { action: "CHANGE_PASSWORD", entity: "User", entityId: userId, userId },
+        tx,
+      );
     });
 
     return { success: true };

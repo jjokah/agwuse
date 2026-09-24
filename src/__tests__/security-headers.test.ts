@@ -20,6 +20,14 @@ describe("security-headers", () => {
     expect(csp).toContain("https://www.facebook.com");
   });
 
+  it("allows Vercel Blob client uploads in connect-src", () => {
+    const connectSrc = buildCsp({ isDev: false })
+      .split("; ")
+      .find((d) => d.startsWith("connect-src"));
+    expect(connectSrc).toContain("https://vercel.com");
+    expect(connectSrc).toContain("https://*.blob.vercel-storage.com");
+  });
+
   it("adds HSTS only in production headers", () => {
     const devHeaders = getSecurityHeaders(true);
     expect(devHeaders.some((h) => h.key === "Strict-Transport-Security")).toBe(false);

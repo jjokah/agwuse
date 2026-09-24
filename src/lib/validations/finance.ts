@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { Prisma } from "@prisma/client";
+import { PUBLIC_GIVING_TYPES, PUBLIC_OFFERING_CATEGORIES } from "@/lib/finance/labels";
 
 // Matches standard 2-decimal money strings or numbers up to 1 billion
 export const moneyStringSchema = z
@@ -65,6 +66,23 @@ export const transactionSchema = z.object({
   referenceNumber: z.string().max(100).optional().nullable(),
   notes: z.string().max(1000).optional().nullable(),
   pledgeId: z.string().optional().nullable(),
+}).superRefine((data, ctx) => {
+  // Expenses never carry a member or pledge; the action strips them.
+  if (data.type === "EXPENSE") return;
+  if (data.pledgeId && !data.memberId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["memberId"],
+      message: "Select the member whose pledge this payment belongs to",
+    });
+  }
+  if (data.type === "PLEDGE_PAYMENT" && !data.pledgeId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["pledgeId"],
+      message: "Select the pledge this payment should be applied to",
+    });
+  }
 });
 
 export const pledgeSchema = z.object({
@@ -76,6 +94,27 @@ export const pledgeSchema = z.object({
   endDate: isoDateSchema.optional().nullable(),
   memberId: z.string().min(1, { error: "Member is required" }),
 });
+
+/**
+ * Public online giving (POST /api/paystack/initialize).
+ * The intent type/category are written to the ledger verbatim by the webhook,
+ * so internal types (EXPENSE, PLEDGE_PAYMENT) must never be accepted here.
+ */
+export const paystackInitializeSchema = z.object({
+  email: z.email({ error: "Valid email is required" }),
+  amount: z
+    .union([z.string(), z.number().transform((n) => n.toString())])
+    .pipe(moneyStringSchema),
+  type: z.enum(PUBLIC_GIVING_TYPES, { error: "Unsupported giving type" }),
+  offeringCategory: z.enum(PUBLIC_OFFERING_CATEGORIES).optional().nullable(),
+  name: z.string().max(100).optional().nullable(),
+});
+
+/** Paystack transaction references: alphanumerics plus - . = _ (ours are AGW_<32 hex>). */
+export const paystackReferenceSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z0-9._=-]{6,100}$/, { error: "Invalid payment reference" });
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
 export type PledgeInput = z.infer<typeof pledgeSchema>;

@@ -1,29 +1,32 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import {
   validateUploadPath,
   UPLOAD_POLICIES,
   isRoleAllowedForFolder,
+  avatarFilenamePrefix,
 } from "@/lib/uploads/policy";
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const body = (await request.json()) as HandleUploadBody;
-
   try {
+    const body = (await request.json()) as HandleUploadBody;
+
     const jsonResponse = await handleUpload({
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
-        // Authenticate the user
-        const session = await auth();
-        if (!session?.user?.id) {
+        // Authenticate against the database (status + tokenVersion + current role)
+        let session;
+        try {
+          session = await requireAuth();
+        } catch {
           throw new Error("Unauthorized: Please sign in to upload files.");
         }
 
         // Validate pathname against traversal attacks
         const pathCheck = validateUploadPath(pathname);
-        if (!pathCheck.valid || !pathCheck.folder) {
+        if (!pathCheck.valid || !pathCheck.folder || !pathCheck.filename) {
           throw new Error(pathCheck.error || "Invalid upload pathname.");
         }
 
@@ -32,6 +35,14 @@ export async function POST(request: Request): Promise<NextResponse> {
           throw new Error(
             `Forbidden: Role '${session.user.role}' is not authorized to upload to folder '${pathCheck.folder}'.`
           );
+        }
+
+        // Avatars are namespaced per user so ownership can be verified later
+        if (
+          pathCheck.folder === "avatars" &&
+          !pathCheck.filename.startsWith(avatarFilenamePrefix(session.user.id))
+        ) {
+          throw new Error("Forbidden: Avatar uploads must be named for the current user.");
         }
 
         const policy = UPLOAD_POLICIES[pathCheck.folder];

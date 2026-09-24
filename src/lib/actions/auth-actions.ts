@@ -201,6 +201,9 @@ export async function loginUser(formData: FormData): Promise<AuthActionResult> {
       if (error.cause?.err?.message === "EMAIL_NOT_VERIFIED") {
         return { success: false, error: "Please verify your email before logging in. Check your inbox." };
       }
+      if (error.cause?.err?.message === "RATE_LIMITED") {
+        return { success: false, error: "Too many sign-in attempts. Please wait a few minutes and try again." };
+      }
       if (error.cause?.err?.message === "ACCOUNT_NOT_ACTIVE") {
         return { success: false, error: "Your account is awaiting approval by a church administrator." };
       }

@@ -17,6 +17,12 @@ export const ROLE_VALUES = [
 
 export type Role = (typeof ROLE_VALUES)[number];
 
+/** Any active account (VISITOR included). */
+export const ALL_ROLES: Role[] = [...ROLE_VALUES];
+
+/** Church members and above; excludes VISITOR accounts. */
+export const MEMBER_ROLES: Role[] = ROLE_VALUES.filter((r) => r !== "VISITOR");
+
 const privileged = new Set<string>(["ADMIN", "SUPER_ADMIN"]);
 
 function roleRank(role: string): number {

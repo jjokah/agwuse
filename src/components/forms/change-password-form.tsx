@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { changePassword } from "@/lib/actions/user-actions";
+import { signOutAction } from "@/lib/actions/session-actions";
 import { toast } from "sonner";
 
 export function ChangePasswordForm() {
@@ -12,10 +13,12 @@ export function ChangePasswordForm() {
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
+    let changed = false;
     try {
       const result = await changePassword(formData);
       if (result.success) {
-        toast.success("Password changed successfully");
+        changed = true;
+        toast.success("Password changed. Please sign in with your new password.");
       } else {
         toast.error(result.error || "Failed to change password");
       }
@@ -23,6 +26,12 @@ export function ChangePasswordForm() {
       toast.error("An unexpected error occurred");
     } finally {
       setLoading(false);
+    }
+
+    // All sessions were revoked server-side; clear this one and go to the login page.
+    // (Outside the try so the framework's redirect isn't reported as an error.)
+    if (changed) {
+      await signOutAction();
     }
   }
 

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginUser } from "@/lib/actions/auth-actions";
+import { safeCallbackUrl } from "@/lib/safe-redirect";
 
 export function LoginForm() {
   const router = useRouter();
@@ -14,14 +15,7 @@ export function LoginForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const rawCallbackUrl = searchParams.get("callbackUrl");
-  const targetUrl =
-    rawCallbackUrl &&
-    rawCallbackUrl.startsWith("/") &&
-    !rawCallbackUrl.startsWith("//") &&
-    !rawCallbackUrl.includes(":")
-      ? rawCallbackUrl
-      : "/dashboard";
+  const targetUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
 
   async function handleSubmit(formData: FormData) {
     setError("");

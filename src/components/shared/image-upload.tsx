@@ -17,6 +17,10 @@ interface ImageUploadProps {
   aspectRatio?: "square" | "video" | "wide";
   onUploadComplete?: (url: string) => void;
   className?: string;
+  /** Prepended to the uploaded filename (e.g. the user id for avatars). */
+  pathPrefix?: string;
+  /** Show the free-text "or enter image URL" input (default true). */
+  allowUrlInput?: boolean;
 }
 
 export function ImageUpload({
@@ -27,6 +31,8 @@ export function ImageUpload({
   aspectRatio = "wide",
   onUploadComplete,
   className = "",
+  pathPrefix = "",
+  allowUrlInput = true,
 }: ImageUploadProps) {
   const [url, setUrl] = useState<string>(defaultValue || "");
   const [uploading, setUploading] = useState(false);
@@ -65,7 +71,7 @@ export function ImageUpload({
     setUploading(true);
 
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
-    const targetPath = `${folder}/${Date.now()}-${sanitizedName}`;
+    const targetPath = `${folder}/${pathPrefix}${Date.now()}-${sanitizedName}`;
 
     try {
       const blob = await upload(targetPath, file, {
@@ -208,20 +214,22 @@ export function ImageUpload({
       )}
 
       {/* Fallback direct URL input option */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="shrink-0">or enter image URL:</span>
-        <Input
-          type="url"
-          value={url}
-          onChange={(e) => {
-            setUrl(e.target.value);
-            onUploadComplete?.(e.target.value);
-          }}
-          placeholder="https://..."
-          className="h-7 text-xs"
-          disabled={uploading}
-        />
-      </div>
+      {allowUrlInput && (
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="shrink-0">or enter image URL:</span>
+          <Input
+            type="url"
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              onUploadComplete?.(e.target.value);
+            }}
+            placeholder="https://..."
+            className="h-7 text-xs"
+            disabled={uploading}
+          />
+        </div>
+      )}
     </div>
   );
 }

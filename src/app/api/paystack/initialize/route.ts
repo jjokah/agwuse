@@ -1,20 +1,11 @@
 import { NextResponse } from "next/server";
-import { z } from "zod/v4";
 import { randomUUID } from "crypto";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
-import { moneyStringSchema, TRANSACTION_TYPES, OFFERING_CATEGORIES } from "@/lib/validations/finance";
+import { paystackInitializeSchema } from "@/lib/validations/finance";
 
-const initializeSchema = z.object({
-  email: z.email({ error: "Valid email is required" }),
-  amount: z
-    .union([z.string(), z.number().transform((n) => n.toString())])
-    .pipe(moneyStringSchema),
-  type: z.enum(TRANSACTION_TYPES),
-  offeringCategory: z.enum(OFFERING_CATEGORIES).optional().nullable(),
-  name: z.string().max(100).optional().nullable(),
-});
+const PAYSTACK_TIMEOUT_MS = 15_000;
 
 export async function POST(request: Request) {
   const ip = await getClientIp();
@@ -41,7 +32,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const parsed = initializeSchema.safeParse(body);
+  const parsed = paystackInitializeSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0].message },
@@ -70,35 +61,46 @@ export async function POST(request: Request) {
       amount: data.amount,
       currency: "NGN",
       type: data.type,
-      category: data.offeringCategory || "GENERAL",
+      category: data.type === "OFFERING" ? data.offeringCategory || "GENERAL" : "GENERAL",
       status: "PENDING",
     },
   });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-  const response = await fetch("https://api.paystack.co/transaction/initialize", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${paystackSecretKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      email: data.email,
-      amount: amountInKobo,
-      currency: "NGN",
-      reference,
-      metadata: {
-        intentRef: reference,
-        name: data.name || "",
+  let result: { status?: boolean; message?: string; data?: { authorization_url?: string; access_code?: string } };
+  try {
+    const response = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${paystackSecretKey}`,
+        "Content-Type": "application/json",
       },
-      callback_url: `${appUrl}/give/complete?reference=${reference}`,
-    }),
-  });
-
-  const result = await response.json();
+      body: JSON.stringify({
+        email: data.email,
+        amount: amountInKobo,
+        currency: "NGN",
+        reference,
+        metadata: {
+          intentRef: reference,
+          name: data.name || "",
+        },
+        callback_url: `${appUrl}/give/complete?reference=${reference}`,
+      }),
+      signal: AbortSignal.timeout(PAYSTACK_TIMEOUT_MS),
+    });
+    result = await response.json();
+  } catch (err) {
+    console.error("Paystack initialize request failed:", err);
+    await markIntentFailed(reference);
+    return NextResponse.json(
+      { error: "Payment processor is unavailable. Please try again shortly." },
+      { status: 502 },
+    );
+  }
 
   if (!result.status || !result.data?.authorization_url) {
+    await markIntentFailed(reference);
     return NextResponse.json(
       { error: result.message || "Failed to initialize payment with processor" },
       { status: 502 },
@@ -110,4 +112,15 @@ export async function POST(request: Request) {
     access_code: result.data.access_code,
     reference,
   });
+}
+
+async function markIntentFailed(reference: string) {
+  try {
+    await prisma.paymentIntent.update({
+      where: { reference },
+      data: { status: "FAILED" },
+    });
+  } catch (err) {
+    console.error("Failed to mark payment intent as FAILED:", err);
+  }
 }

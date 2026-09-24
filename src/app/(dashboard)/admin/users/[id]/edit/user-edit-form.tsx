@@ -15,10 +15,11 @@ import {
 } from "@/components/ui/select";
 import { updateUser } from "@/lib/actions/admin-actions";
 import { toast } from "sonner";
-import type { User, Department } from "@prisma/client";
+import type { Department } from "@prisma/client";
+import type { AdminUserProfile } from "@/lib/data/users";
 
 interface UserEditFormProps {
-  user: User;
+  user: AdminUserProfile;
   departments: Pick<Department, "id" | "name">[];
 }
 

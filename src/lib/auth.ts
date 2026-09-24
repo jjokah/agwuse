@@ -6,6 +6,10 @@ import { prisma } from "@/lib/prisma";
 import { refreshToken, type AuthToken } from "@/lib/auth-token";
 import type { Adapter } from "next-auth/adapters";
 import type { UserRole } from "@/lib/constants";
+import { checkDualRateLimit, getClientIp } from "@/lib/ratelimit";
+
+/** bcrypt (cost 12) hash of a random string; used only to equalize timing. */
+const DUMMY_PASSWORD_HASH = "$2b$12$hBOKSlmx6G7ND/5dtjUFN.1/w3kekJMfZfYsEQyND.ENuWJV.kME6";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma) as Adapter,
@@ -32,11 +36,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = (credentials.email as string).trim().toLowerCase();
         const password = credentials.password as string;
 
+        // Throttle per IP and per account. This runs inside authorize() so it also
+        // covers direct POSTs to /api/auth/callback/credentials, not just loginUser().
+        const limit = await checkDualRateLimit("login", await getClientIp(), email);
+        if (!limit.success) {
+          throw new Error("RATE_LIMITED");
+        }
+
         const user = await prisma.user.findUnique({
           where: { email },
         });
 
         if (!user || !user.passwordHash) {
+          // Spend the same bcrypt time as a real check so response timing
+          // does not reveal which emails are registered.
+          await compare(password, DUMMY_PASSWORD_HASH);
           return null;
         }
 

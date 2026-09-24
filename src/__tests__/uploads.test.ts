@@ -3,6 +3,8 @@ import {
   validateUploadPath,
   isRoleAllowedForFolder,
   UPLOAD_POLICIES,
+  isOwnedAvatarUrl,
+  avatarFilenamePrefix,
 } from "@/lib/uploads/policy";
 import { isVercelBlobUrl, deleteOwnedBlobs } from "@/lib/uploads/cleanup";
 
@@ -94,5 +96,27 @@ describe("Vercel Blob Cleanup & URL Detection", () => {
       null,
     ]);
     expect(res).toEqual({ deleted: 0, errors: 0 });
+  });
+});
+
+describe("avatar ownership", () => {
+  const userId = "user_abc123";
+  const store = "https://store1.public.blob.vercel-storage.com";
+
+  it("accepts only the user's own avatar blobs", () => {
+    expect(isOwnedAvatarUrl(`${store}/avatars/${avatarFilenamePrefix(userId)}1700000000-me.jpg`, userId)).toBe(true);
+  });
+
+  it("rejects other users' avatars, other folders, and other hosts", () => {
+    expect(isOwnedAvatarUrl(`${store}/avatars/user_other-1700000000-x.jpg`, userId)).toBe(false);
+    expect(isOwnedAvatarUrl(`${store}/gallery/${userId}-1700000000-x.jpg`, userId)).toBe(false);
+    expect(isOwnedAvatarUrl(`https://evil.com/avatars/${userId}-x.jpg`, userId)).toBe(false);
+    expect(isOwnedAvatarUrl(`http://store1.public.blob.vercel-storage.com/avatars/${userId}-x.jpg`, userId)).toBe(false);
+    expect(isOwnedAvatarUrl("", userId)).toBe(false);
+    expect(isOwnedAvatarUrl(null, userId)).toBe(false);
+  });
+
+  it("does not let a prefix-extended id match (user_abc123 vs user_abc1234)", () => {
+    expect(isOwnedAvatarUrl(`${store}/avatars/user_abc1234-1-x.jpg`, userId)).toBe(false);
   });
 });

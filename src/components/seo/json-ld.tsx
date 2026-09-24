@@ -1,5 +1,6 @@
 import type { ChurchInfo } from "@/lib/settings/schema";
 import { SITE_URL } from "@/lib/site";
+import { serializeJsonLd } from "@/lib/json-ld";
 
 export function ChurchJsonLd({ churchInfo }: { churchInfo?: Partial<ChurchInfo> }) {
   const schema = {
@@ -25,14 +26,17 @@ export function ChurchJsonLd({ churchInfo }: { churchInfo?: Partial<ChurchInfo> 
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   );
 }
 
 export function EventJsonLd({
   event,
+  address,
 }: {
+  /** Church street address from settings (defaults to the seeded address). */
+  address?: string;
   event: {
     id: string;
     title: string;
@@ -57,7 +61,7 @@ export function EventJsonLd({
       name: event.location || "Assemblies of God Church, Wuse Zone 5",
       address: {
         "@type": "PostalAddress",
-        streetAddress: "53 Accra Street, Wuse Zone 5",
+        streetAddress: address || "53 Accra Street, Wuse Zone 5",
         addressLocality: "Abuja",
         addressRegion: "FCT",
         addressCountry: "NG",
@@ -69,7 +73,7 @@ export function EventJsonLd({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   );
 }
@@ -111,7 +115,7 @@ export function BlogPostJsonLd({
   return (
     <script
       type="application/ld+json"
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+      dangerouslySetInnerHTML={{ __html: serializeJsonLd(schema) }}
     />
   );
 }

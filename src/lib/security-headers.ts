@@ -5,7 +5,7 @@
  * - 'unsafe-eval' enabled only in development mode.
  * - object-src 'none', base-uri 'self', form-action 'self', frame-ancestors 'none'.
  * - frame-src permits Paystack checkout, YouTube (including youtube-nocookie), Facebook, and Google Maps.
- * - connect-src permits Paystack API and Vercel Blob.
+ * - connect-src permits Paystack API and Vercel Blob (client uploads call https://vercel.com/api/blob).
  */
 export function buildCsp(options: { isDev?: boolean } = {}): string {
   const isDev = options.isDev ?? process.env.NODE_ENV !== "production";
@@ -26,6 +26,8 @@ export function buildCsp(options: { isDev?: boolean } = {}): string {
     "connect-src": [
       "'self'",
       "https://api.paystack.co",
+      // @vercel/blob client uploads PUT to https://vercel.com/api/blob
+      "https://vercel.com",
       "https://*.blob.vercel-storage.com",
     ],
     "frame-src": [

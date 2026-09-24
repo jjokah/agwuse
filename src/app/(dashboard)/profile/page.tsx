@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
+import { ALL_ROLES } from "@/lib/authz/roles";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,12 +14,12 @@ export const metadata: Metadata = {
 };
 
 export default async function ProfilePage() {
-  const session = await auth();
-  if (!session?.user?.id) redirect("/login");
+  const session = await requirePageRole(ALL_ROLES);
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: {
+      id: true,
       firstName: true,
       lastName: true,
       email: true,

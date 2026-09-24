@@ -106,3 +106,32 @@ export function isRoleAllowedForFolder(role: UserRole, folder: UploadFolder): bo
   const policy = UPLOAD_POLICIES[folder];
   return policy ? policy.allowedRoles.includes(role) : false;
 }
+
+/**
+ * Avatar blobs are namespaced per user: avatars/<userId>-<timestamp>-<name>.
+ * This lets the server prove that a stored avatar URL belongs to the user
+ * before accepting it or deleting the previous one.
+ */
+export function avatarFilenamePrefix(userId: string): string {
+  return `${userId}-`;
+}
+
+/**
+ * True when `url` is a Vercel Blob URL for an avatar uploaded by `userId`.
+ */
+export function isOwnedAvatarUrl(url: string | null | undefined, userId: string): boolean {
+  if (!url || !userId) return false;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host !== "blob.vercel-storage.com" && !host.endsWith(".blob.vercel-storage.com")) {
+      return false;
+    }
+    return decodeURIComponent(parsed.pathname).startsWith(
+      `/avatars/${avatarFilenamePrefix(userId)}`,
+    );
+  } catch {
+    return false;
+  }
+}

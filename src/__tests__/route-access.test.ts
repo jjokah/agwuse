@@ -95,4 +95,70 @@ describe("resolveRouteAccess", () => {
     expect(resolveRouteAccess("/my-giving", { isLoggedIn: true, role: "VISITOR" })).toEqual({ action: "allow" });
     expect(resolveRouteAccess("/profile", { isLoggedIn: true, role: "MEMBER" })).toEqual({ action: "allow" });
   });
+
+  // --- Regression: public routes that previously redirected to /login ---
+  it("allows the Paystack return page and metadata routes for anonymous users", () => {
+    const paths = [
+      "/give/complete",
+      "/robots.txt",
+      "/sitemap.xml",
+      "/manifest.webmanifest",
+      "/opengraph-image",
+      "/opengraph-image-abc123",
+      "/twitter-image",
+      "/icon.png",
+      "/apple-icon.png",
+      "/gallery/page/2",
+    ];
+    for (const p of paths) {
+      expect(resolveRouteAccess(p, { isLoggedIn: false })).toEqual({ action: "allow" });
+    }
+  });
+
+  it("preserves the query string in callbackUrl", () => {
+    expect(
+      resolveRouteAccess("/finance/transactions", { isLoggedIn: false, search: "?page=2&type=TITHE" }),
+    ).toEqual({
+      action: "redirect",
+      target: `/login?callbackUrl=${encodeURIComponent("/finance/transactions?page=2&type=TITHE")}`,
+    });
+  });
+
+  it("does not let a file extension unlock protected routes", () => {
+    expect(resolveRouteAccess("/admin/users.png", { isLoggedIn: false })).toEqual({
+      action: "redirect",
+      target: `/login?callbackUrl=${encodeURIComponent("/admin/users.png")}`,
+    });
+    expect(resolveRouteAccess("/api/finance/receipts/x.js", { isLoggedIn: false })).toMatchObject({
+      action: "json",
+      status: 401,
+    });
+    expect(resolveRouteAccess("/admin/users.png", { isLoggedIn: true, role: "MEMBER" })).toEqual({
+      action: "redirect",
+      target: "/dashboard",
+    });
+  });
+
+  it("no longer exposes stale public API prefixes", () => {
+    for (const p of ["/api/content/x", "/api/prayer-requests", "/api/testimonies", "/api/departments"]) {
+      expect(resolveRouteAccess(p, { isLoggedIn: false })).toMatchObject({ action: "json", status: 401 });
+    }
+  });
+
+  it("lets /api/upload through (handler authenticates; Blob callback has no cookie)", () => {
+    expect(resolveRouteAccess("/api/upload", { isLoggedIn: false })).toEqual({ action: "allow" });
+  });
+
+  it("keeps protected finance APIs behind auth", () => {
+    expect(resolveRouteAccess("/api/finance/receipts/abc", { isLoggedIn: false })).toMatchObject({
+      action: "json",
+      status: 401,
+    });
+  });
+
+  it("does not treat look-alike prefixes as admin/finance", () => {
+    expect(resolveRouteAccess("/financial-news", { isLoggedIn: true, role: "MEMBER" })).toEqual({
+      action: "allow",
+    });
+  });
 });

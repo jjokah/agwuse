@@ -133,4 +133,17 @@ describe("JSON-LD Schemas", () => {
     expect(json.dateModified).toBe(updatedAt.toISOString());
     expect(json.mainEntityOfPage["@id"]).toBe(`${SITE_URL}/blog/walking-in-faith`);
   });
+
+  it("escapes markup in JSON-LD so a title cannot close the script element", () => {
+    const payload = "</script><script>alert(1)</script> & more";
+    const element = BlogPostJsonLd({
+      post: { slug: "x", title: payload },
+    });
+
+    const html: string = element.props.dangerouslySetInnerHTML.__html;
+    expect(html).not.toContain("<");
+    expect(html).not.toContain(">");
+    // Still valid JSON that round-trips to the original value
+    expect(JSON.parse(html).headline).toBe(payload);
+  });
 });
