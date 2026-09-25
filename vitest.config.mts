@@ -30,6 +30,8 @@ export default defineConfig({
           globals: true,
           // Without a test database, collect nothing instead of touching a real one.
           include: hasTestDb ? ["src/**/*.int.test.ts"] : [],
+          // Suites share one database and truncate it: run files one at a time
+          fileParallelism: false,
           sequence: { concurrent: false },
         },
       },

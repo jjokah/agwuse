@@ -313,12 +313,32 @@ All wall-clock times (event times, "today", report day/month boundaries, display
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Type-check with `tsc --noEmit` |
 | `npm test` | Run the Vitest suites |
+| `npm run test:integration` | Run the database integration suites (needs a `*_test` database, see below) |
 | `npm run db:deploy` | Apply pending migrations (CI / production) |
 | `npm run db:migrate` | Run Prisma migrations |
 | `npm run db:push` | Push schema to database |
 | `npm run db:generate` | Generate Prisma Client |
 | `npm run db:studio` | Open Prisma Studio |
 | `npm run db:seed` | Seed database |
+
+### Integration tests
+
+`src/__tests__/integration/*.int.test.ts` exercise the finance ledger and Paystack
+recording against a real PostgreSQL database (receipt numbering, pledge payments and
+voids, concurrent Paystack writers). They **truncate tables**, so they only run when
+`DATABASE_URL` points at a database whose name contains `_test`; otherwise the
+project collects no files. CI runs them against its own Postgres service.
+
+```powershell
+# One-time: create and migrate a local test database in the Docker container
+docker exec agwuse-db psql -U agwuse -d agwuse -c "create database agwuse_test"
+$env:DATABASE_URL="postgresql://agwuse:agwuse_dev_2026@localhost:5433/agwuse_test"
+$env:DIRECT_DATABASE_URL=$env:DATABASE_URL
+npm run db:deploy
+
+# Run
+npm run test:integration
+```
 
 ---
 
