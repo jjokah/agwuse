@@ -1,46 +1,16 @@
 import type { NextConfig } from "next";
+import { REMOTE_IMAGE_PATTERNS } from "./src/lib/media-hosts";
+import { getSecurityHeaders } from "./src/lib/security-headers";
 
 const nextConfig: NextConfig = {
   images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "**" },
-    ],
+    remotePatterns: REMOTE_IMAGE_PATTERNS,
   },
   async headers() {
     return [
       {
         source: "/(.*)",
-        headers: [
-          {
-            key: "X-Frame-Options",
-            value: "DENY",
-          },
-          {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
-          },
-          {
-            key: "Referrer-Policy",
-            value: "strict-origin-when-cross-origin",
-          },
-          {
-            key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
-          },
-          {
-            key: "Content-Security-Policy",
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.paystack.co",
-              "style-src 'self' 'unsafe-inline'",
-              "img-src 'self' data: blob: https:",
-              "font-src 'self' data:",
-              "connect-src 'self' https://api.paystack.co",
-              "frame-src https://checkout.paystack.com https://www.youtube.com https://www.google.com",
-              "media-src 'self' https:",
-            ].join("; "),
-          },
-        ],
+        headers: getSecurityHeaders(),
       },
     ];
   },

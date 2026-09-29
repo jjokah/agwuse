@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { StatCard } from "@/components/shared/stat-card";
 import { formatCurrency, formatDate } from "@/lib/utils";
@@ -21,37 +21,39 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { startOfLagosMonth, startOfLagosYear } from "@/lib/tz";
 
 export const metadata: Metadata = {
   title: "Finance Dashboard",
 };
 
 export default async function FinanceDashboardPage() {
-  await requireRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  const startOfMonth = startOfLagosMonth(now);
+  const startOfYear = startOfLagosYear(now);
 
   const [monthIncome, monthExpense, yearIncome, yearExpense, recentTransactions] =
     await Promise.all([
       prisma.financialTransaction.aggregate({
-        where: { type: { not: "EXPENSE" }, date: { gte: startOfMonth } },
+        where: { type: { not: "EXPENSE" }, date: { gte: startOfMonth }, voidedAt: null },
         _sum: { amount: true },
       }),
       prisma.financialTransaction.aggregate({
-        where: { type: "EXPENSE", date: { gte: startOfMonth } },
+        where: { type: "EXPENSE", date: { gte: startOfMonth }, voidedAt: null },
         _sum: { amount: true },
       }),
       prisma.financialTransaction.aggregate({
-        where: { type: { not: "EXPENSE" }, date: { gte: startOfYear } },
+        where: { type: { not: "EXPENSE" }, date: { gte: startOfYear }, voidedAt: null },
         _sum: { amount: true },
       }),
       prisma.financialTransaction.aggregate({
-        where: { type: "EXPENSE", date: { gte: startOfYear } },
+        where: { type: "EXPENSE", date: { gte: startOfYear }, voidedAt: null },
         _sum: { amount: true },
       }),
       prisma.financialTransaction.findMany({
+        where: { voidedAt: null },
         orderBy: { createdAt: "desc" },
         take: 15,
         include: {

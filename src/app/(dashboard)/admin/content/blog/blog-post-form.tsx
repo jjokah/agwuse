@@ -13,9 +13,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RichTextEditor } from "@/components/forms/rich-text-editor";
+import dynamic from "next/dynamic";
 import { createBlogPost, updateBlogPost } from "@/lib/actions/content-actions";
+import { ImageUpload } from "@/components/shared/image-upload";
 import { toast } from "sonner";
+
+const RichTextEditor = dynamic(
+  () => import("@/components/forms/rich-text-editor").then((mod) => mod.RichTextEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="min-h-[250px] rounded-md border border-input bg-muted/20 p-4 flex items-center justify-center text-sm text-muted-foreground">
+        Loading editor...
+      </div>
+    ),
+  }
+);
 
 interface BlogPostFormProps {
   post?: {
@@ -84,12 +97,13 @@ export function BlogPostForm({ post }: BlogPostFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="featuredImage">Featured Image URL</Label>
-          <Input
-            id="featuredImage"
+          <Label htmlFor="featuredImage">Featured Image</Label>
+          <ImageUpload
             name="featuredImage"
-            defaultValue={post?.featuredImage || ""}
-            placeholder="https://..."
+            defaultValue={post?.featuredImage}
+            folder="blog"
+            label="Upload Featured Image"
+            aspectRatio="wide"
           />
         </div>
       </div>

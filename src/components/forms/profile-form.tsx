@@ -1,15 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateProfile } from "@/lib/actions/user-actions";
+import { ImageUpload } from "@/components/shared/image-upload";
+import { avatarFilenamePrefix } from "@/lib/uploads/policy";
 import { toast } from "sonner";
 
 interface ProfileFormProps {
   user: {
+    id: string;
     firstName: string;
     lastName: string;
     email: string;
@@ -19,10 +23,13 @@ interface ProfileFormProps {
     dateOfBirth: Date | null;
     gender: string | null;
     maritalStatus: string | null;
+    image?: string | null;
+    profilePhoto?: string | null;
   };
 }
 
 export function ProfileForm({ user }: ProfileFormProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(formData: FormData) {
@@ -31,6 +38,7 @@ export function ProfileForm({ user }: ProfileFormProps) {
       const result = await updateProfile(formData);
       if (result.success) {
         toast.success("Profile updated successfully");
+        router.refresh();
       } else {
         toast.error(result.error || "Failed to update profile");
       }
@@ -43,6 +51,19 @@ export function ProfileForm({ user }: ProfileFormProps) {
 
   return (
     <form action={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label>Profile Picture</Label>
+        <ImageUpload
+          name="image"
+          defaultValue={user.image || user.profilePhoto}
+          folder="avatars"
+          label="Upload Profile Photo"
+          aspectRatio="square"
+          pathPrefix={avatarFilenamePrefix(user.id)}
+          allowUrlInput={false}
+        />
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="firstName">First Name</Label>

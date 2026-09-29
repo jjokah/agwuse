@@ -1,16 +1,19 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { CHURCH_INFO } from "@/lib/constants";
+import type { ChurchInfo } from "@/lib/settings";
+import { formatDate } from "@/lib/utils";
 
-function addChurchHeader(doc: jsPDF) {
+function addChurchHeader(doc: jsPDF, churchInfo?: Partial<ChurchInfo>) {
+  const info = { ...CHURCH_INFO, ...churchInfo };
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
-  doc.text(CHURCH_INFO.shortName, 105, 15, { align: "center" });
+  doc.text(info.shortName, 105, 15, { align: "center" });
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
-  doc.text(CHURCH_INFO.name, 105, 21, { align: "center" });
-  doc.text(CHURCH_INFO.address, 105, 26, { align: "center" });
-  doc.text(`Tel: ${CHURCH_INFO.phones[0]}`, 105, 31, { align: "center" });
+  doc.text(info.name, 105, 21, { align: "center" });
+  doc.text(info.address, 105, 26, { align: "center" });
+  doc.text(`Tel: ${info.phones[0]}`, 105, 31, { align: "center" });
   doc.setDrawColor(180, 134, 11); // brand gold
   doc.setLineWidth(0.5);
   doc.line(15, 34, 195, 34);
@@ -24,7 +27,7 @@ function formatNaira(amount: number): string {
   }).format(amount);
 }
 
-export function generateReceiptPDF(receipt: {
+export type ReceiptData = {
   receiptNumber: string;
   date: string;
   memberName: string;
@@ -32,9 +35,15 @@ export function generateReceiptPDF(receipt: {
   amount: number;
   paymentMethod: string;
   notes?: string;
-}) {
+};
+
+export function buildReceiptPDFDoc(
+  receipt: ReceiptData,
+  churchInfo?: Partial<ChurchInfo>
+): jsPDF {
+  const info = { ...CHURCH_INFO, ...churchInfo };
   const doc = new jsPDF();
-  addChurchHeader(doc);
+  addChurchHeader(doc, info);
 
   // Receipt title
   doc.setFontSize(14);
@@ -55,9 +64,9 @@ export function generateReceiptPDF(receipt: {
   const fields = [
     ["Date:", receipt.date],
     ["Received From:", receipt.memberName],
-    ["Transaction Type:", receipt.type.replace("_", " ")],
+    ["Transaction Type:", receipt.type],
     ["Amount:", formatNaira(receipt.amount)],
-    ["Payment Method:", receipt.paymentMethod.replace("_", " ")],
+    ["Payment Method:", receipt.paymentMethod],
   ];
 
   if (receipt.notes) {
@@ -88,29 +97,43 @@ export function generateReceiptPDF(receipt: {
     align: "center",
   });
   doc.text(
-    `${CHURCH_INFO.name} | ${CHURCH_INFO.address}`,
+    `${info.name} | ${info.address}`,
     105,
     footerY + 5,
     { align: "center" }
   );
 
-  doc.save(`receipt-${receipt.receiptNumber}.pdf`);
+  return doc;
 }
 
-export function generateReportPDF(
-  summary: {
-    period: string;
-    totalIncome: number;
-    totalExpense: number;
-    netIncome: number;
-    incomeByType: Record<string, number>;
-    expenseByCategory: Record<string, number>;
-    transactionCount: number;
-  },
-  transactions: Record<string, string>[]
-) {
+export function buildReceiptPDFBuffer(
+  receipt: ReceiptData,
+  churchInfo?: Partial<ChurchInfo>
+): ArrayBuffer {
+  const doc = buildReceiptPDFDoc(receipt, churchInfo);
+  return doc.output("arraybuffer");
+}
+
+/** Display-ready report summary: breakdown keys are human-readable labels. */
+export type ReportSummary = {
+  period: string;
+  totalIncome: number;
+  totalExpense: number;
+  netIncome: number;
+  incomeByType: Record<string, number>;
+  expenseByCategory: Record<string, number>;
+  transactionCount: number;
+  /** Optional footnote, e.g. when the transaction list is truncated. */
+  note?: string;
+};
+
+export function buildReportPDFDoc(
+  summary: ReportSummary,
+  transactions: Record<string, string>[],
+  churchInfo?: Partial<ChurchInfo>
+): jsPDF {
   const doc = new jsPDF();
-  addChurchHeader(doc);
+  addChurchHeader(doc, churchInfo);
 
   // Report title
   doc.setFontSize(14);
@@ -151,101 +174,118 @@ export function generateReportPDF(
   if (Object.keys(summary.incomeByType).length > 0) {
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text("Income Breakdown", 15, y);
-    y += 5;
+    doc.text("Income by Type", 15, y);
+    y += 6;
 
-    const incomeRows = Object.entries(summary.incomeByType)
-      .sort(([, a], [, b]) => b - a)
-      .map(([type, amount]) => [type.replace("_", " "), formatNaira(amount)]);
+    const incomeRows = Object.entries(summary.incomeByType).map(
+      ([type, amount]) => [type, formatNaira(amount)]
+    );
 
     autoTable(doc, {
       startY: y,
-      head: [["Type", "Amount"]],
+      head: [["Category", "Amount"]],
       body: incomeRows,
       theme: "grid",
-      headStyles: { fillColor: [180, 134, 11] },
+      headStyles: { fillColor: [40, 167, 69] },
       margin: { left: 15, right: 15 },
-      styles: { fontSize: 9 },
+      styles: { fontSize: 8 },
     });
 
     y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
-  y += 10;
+    y += 10;
   }
 
   // Expense breakdown
   if (Object.keys(summary.expenseByCategory).length > 0) {
+    // Check if we need a page break
+    if (y > 220) {
+      doc.addPage();
+      y = 20;
+    }
+
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text("Expense Breakdown", 15, y);
-    y += 5;
+    doc.text("Expenses by Category", 15, y);
+    y += 6;
 
-    const expenseRows = Object.entries(summary.expenseByCategory)
-      .sort(([, a], [, b]) => b - a)
-      .map(([cat, amount]) => [cat.replace("_", " "), formatNaira(amount)]);
+    const expenseRows = Object.entries(summary.expenseByCategory).map(
+      ([cat, amount]) => [cat, formatNaira(amount)]
+    );
 
     autoTable(doc, {
       startY: y,
       head: [["Category", "Amount"]],
       body: expenseRows,
       theme: "grid",
-      headStyles: { fillColor: [180, 134, 11] },
+      headStyles: { fillColor: [220, 53, 69] },
       margin: { left: 15, right: 15 },
-      styles: { fontSize: 9 },
+      styles: { fontSize: 8 },
     });
 
     y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
-  y += 10;
+    y += 10;
   }
 
-  // Transaction detail table (new page if needed)
+  // Transactions table
   if (transactions.length > 0) {
-    if (y > 220) {
+    if (y > 200) {
       doc.addPage();
-      y = 15;
+      y = 20;
     }
 
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text("Transaction Details", 15, y);
-    y += 5;
+    doc.text("Transactions", 15, y);
+    y += 6;
 
-    const headers = ["Date", "Receipt #", "Type", "Member", "Method", "Amount"];
-    const rows = transactions.map((tx) => [
-      tx["Date"],
-      tx["Receipt #"],
-      tx["Type"],
-      tx["Member"],
-      tx["Method"],
-      tx["Amount"],
-    ]);
+    const headers = Object.keys(transactions[0]);
+    const rows = transactions.map((t) => headers.map((h) => t[h] ?? ""));
 
     autoTable(doc, {
       startY: y,
       head: [headers],
       body: rows,
-      theme: "grid",
-      headStyles: { fillColor: [180, 134, 11] },
+      theme: "striped",
+      headStyles: { fillColor: [26, 26, 46] },
       margin: { left: 15, right: 15 },
       styles: { fontSize: 7 },
-      columnStyles: {
-        5: { halign: "right" },
-      },
     });
   }
 
-  // Footer on last page
+  if (summary.note) {
+    y = ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y) + 6;
+    if (y > 280) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.text(summary.note, 15, y, { maxWidth: 180 });
+  }
+
+  // Page numbers
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
     doc.text(
-      `Generated on ${new Date().toLocaleDateString()} | Page ${i} of ${pageCount}`,
+      `Generated on ${formatDate(new Date())} | Page ${i} of ${pageCount}`,
       105,
       290,
       { align: "center" }
     );
   }
 
-  doc.save(`agwuse-report-${Date.now()}.pdf`);
+  return doc;
 }
+
+export function buildReportPDFBuffer(
+  summary: ReportSummary,
+  transactions: Record<string, string>[],
+  churchInfo?: Partial<ChurchInfo>
+): ArrayBuffer {
+  const doc = buildReportPDFDoc(summary, transactions, churchInfo);
+  return doc.output("arraybuffer");
+}
+

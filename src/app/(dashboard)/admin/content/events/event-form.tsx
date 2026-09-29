@@ -14,7 +14,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createEvent, updateEvent } from "@/lib/actions/content-actions";
+import { ImageUpload } from "@/components/shared/image-upload";
 import { toast } from "sonner";
+import { toLagosDateTimeInputValue } from "@/lib/tz";
 
 interface EventFormProps {
   event?: {
@@ -39,8 +41,9 @@ const EVENT_TYPES = [
   { value: "OTHER", label: "Other" },
 ];
 
+/** datetime-local values are Africa/Lagos wall-clock time (see src/lib/tz.ts). */
 function toDateInputValue(d: Date): string {
-  return new Date(d).toISOString().slice(0, 16);
+  return toLagosDateTimeInputValue(new Date(d));
 }
 
 export function EventForm({ event }: EventFormProps) {
@@ -139,12 +142,13 @@ export function EventForm({ event }: EventFormProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="imageUrl">Image URL (optional)</Label>
-        <Input
-          id="imageUrl"
+        <Label htmlFor="imageUrl">Event Banner Image (optional)</Label>
+        <ImageUpload
           name="imageUrl"
-          defaultValue={event?.imageUrl || ""}
-          placeholder="https://..."
+          defaultValue={event?.imageUrl}
+          folder="events"
+          label="Upload Event Banner"
+          aspectRatio="wide"
         />
       </div>
 

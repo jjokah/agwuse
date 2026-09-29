@@ -2,21 +2,24 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
-import { z } from "zod/v4";
+import {
+  blogPostSchema,
+  eventSchema,
+  sermonSchema,
+  departmentSchema,
+  liveStreamSchema,
+} from "@/lib/validations/content";
+import { galleryImageSchema } from "@/lib/validations/media";
+import { writeAuditLog } from "@/lib/audit";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { revalidateBlogPost, revalidateEvent, revalidateSermon, revalidateGallery } from "@/lib/revalidate";
+import { deleteOwnedBlobs } from "@/lib/uploads/cleanup";
 
 // ============================================================
 // BLOG POSTS
 // ============================================================
-
-const blogPostSchema = z.object({
-  title: z.string().min(2, { error: "Title is required" }),
-  content: z.string().min(10, { error: "Content is required" }),
-  excerpt: z.string().optional(),
-  type: z.enum(["BLOG", "ANNOUNCEMENT", "NEWS"]),
-  featuredImage: z.string().optional(),
-  published: z.string().optional(),
-});
 
 function generateSlug(title: string): string {
   return title
@@ -47,30 +50,33 @@ export async function createBlogPost(formData: FormData) {
   const isPublished = data.published === "on";
   let slug = generateSlug(data.title);
 
-  // Ensure unique slug
-  const existing = await prisma.blogPost.findUnique({ where: { slug } });
-  if (existing) {
-    slug = `${slug}-${Date.now().toString(36)}`;
+  try {
+    // Ensure unique slug
+    const existing = await prisma.blogPost.findUnique({ where: { slug } });
+    if (existing) {
+      slug = `${slug}-${Date.now().toString(36)}`;
+    }
+
+    await prisma.blogPost.create({
+      data: {
+        title: data.title.trim(),
+        slug,
+        content: sanitizeHtml(data.content),
+        excerpt: data.excerpt?.trim() || null,
+        type: data.type as "BLOG" | "ANNOUNCEMENT" | "NEWS",
+        featuredImage: data.featuredImage || null,
+        published: isPublished,
+        publishedAt: isPublished ? new Date() : null,
+        authorId: session.user.id,
+      },
+    });
+
+    revalidateBlogPost(slug);
+    return { success: true };
+  } catch (err) {
+    console.error("createBlogPost error:", err);
+    return { success: false, error: "Failed to create blog post. Please try again." };
   }
-
-  await prisma.blogPost.create({
-    data: {
-      title: data.title,
-      slug,
-      content: data.content,
-      excerpt: data.excerpt || null,
-      type: data.type as "BLOG" | "ANNOUNCEMENT" | "NEWS",
-      featuredImage: data.featuredImage || null,
-      published: isPublished,
-      publishedAt: isPublished ? new Date() : null,
-      authorId: session.user.id,
-    },
-  });
-
-  revalidatePath("/admin/content/blog");
-  revalidatePath("/blog");
-  revalidatePath("/announcements");
-  return { success: true };
 }
 
 export async function updateBlogPost(id: string, formData: FormData) {
@@ -93,52 +99,68 @@ export async function updateBlogPost(id: string, formData: FormData) {
   const data = parsed.data;
   const isPublished = data.published === "on";
 
-  const existing = await prisma.blogPost.findUnique({ where: { id } });
-  if (!existing) {
-    return { success: false, error: "Post not found" };
+  try {
+    const existing = await prisma.blogPost.findUnique({ where: { id } });
+    if (!existing) {
+      return { success: false, error: "Post not found" };
+    }
+
+    const newImage = data.featuredImage || null;
+    if (existing.featuredImage && existing.featuredImage !== newImage) {
+      const oldImage = existing.featuredImage;
+      after(async () => {
+        await deleteOwnedBlobs([oldImage]);
+      });
+    }
+
+    await prisma.blogPost.update({
+      where: { id },
+      data: {
+        title: data.title.trim(),
+        content: sanitizeHtml(data.content),
+        excerpt: data.excerpt?.trim() || null,
+        type: data.type as "BLOG" | "ANNOUNCEMENT" | "NEWS",
+        featuredImage: newImage,
+        published: isPublished,
+        publishedAt: isPublished && !existing.publishedAt ? new Date() : existing.publishedAt,
+      },
+    });
+
+    revalidateBlogPost(existing.slug);
+    return { success: true };
+  } catch (err) {
+    console.error("updateBlogPost error:", err);
+    return { success: false, error: "Failed to update blog post. Please try again." };
   }
-
-  await prisma.blogPost.update({
-    where: { id },
-    data: {
-      title: data.title,
-      content: data.content,
-      excerpt: data.excerpt || null,
-      type: data.type as "BLOG" | "ANNOUNCEMENT" | "NEWS",
-      featuredImage: data.featuredImage || null,
-      published: isPublished,
-      publishedAt: isPublished && !existing.publishedAt ? new Date() : existing.publishedAt,
-    },
-  });
-
-  revalidatePath("/admin/content/blog");
-  revalidatePath("/blog");
-  revalidatePath("/announcements");
-  return { success: true };
 }
 
 export async function deleteBlogPost(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
-  await prisma.blogPost.delete({ where: { id } });
-  revalidatePath("/admin/content/blog");
-  revalidatePath("/blog");
-  return { success: true };
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  try {
+    const deleted = await prisma.blogPost.delete({ where: { id } });
+    await writeAuditLog({
+      action: "DELETE_BLOG_POST",
+      entity: "BlogPost",
+      entityId: id,
+      userId: session.user.id,
+      details: { title: deleted.title, slug: deleted.slug },
+    });
+    if (deleted.featuredImage) {
+      after(async () => {
+        await deleteOwnedBlobs([deleted.featuredImage]);
+      });
+    }
+    revalidateBlogPost(deleted.slug);
+    return { success: true };
+  } catch (err) {
+    console.error("deleteBlogPost error:", err);
+    return { success: false, error: "Failed to delete blog post." };
+  }
 }
 
 // ============================================================
 // EVENTS
 // ============================================================
-
-const eventSchema = z.object({
-  title: z.string().min(2, { error: "Title is required" }),
-  description: z.string().optional(),
-  startDate: z.string().min(1, { error: "Start date is required" }),
-  endDate: z.string().optional(),
-  location: z.string().optional(),
-  type: z.enum(["SERVICE", "REVIVAL", "CONFERENCE", "OUTREACH", "HARVEST", "OTHER"]),
-  imageUrl: z.string().optional(),
-  isPublished: z.string().optional(),
-});
 
 export async function createEvent(formData: FormData) {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
@@ -161,23 +183,27 @@ export async function createEvent(formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.event.create({
-    data: {
-      title: data.title,
-      description: data.description || null,
-      startDate: new Date(data.startDate),
-      endDate: data.endDate ? new Date(data.endDate) : null,
-      location: data.location || "AG Wuse, 53 Accra Street, Wuse Zone 5",
-      type: data.type as "SERVICE" | "REVIVAL" | "CONFERENCE" | "OUTREACH" | "HARVEST" | "OTHER",
-      imageUrl: data.imageUrl || null,
-      isPublished: data.isPublished === "on",
-      createdById: session.user.id,
-    },
-  });
+  try {
+    const created = await prisma.event.create({
+      data: {
+        title: data.title.trim(),
+        description: data.description?.trim() || null,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        location: data.location || "AG Wuse, 53 Accra Street, Wuse Zone 5",
+        type: data.type as "SERVICE" | "REVIVAL" | "CONFERENCE" | "OUTREACH" | "HARVEST" | "OTHER",
+        imageUrl: data.imageUrl || null,
+        isPublished: data.isPublished === "on",
+        createdById: session.user.id,
+      },
+    });
 
-  revalidatePath("/admin/content/events");
-  revalidatePath("/events");
-  return { success: true };
+    revalidateEvent(created.id);
+    return { success: true };
+  } catch (err) {
+    console.error("createEvent error:", err);
+    return { success: false, error: "Failed to create event. Please try again." };
+  }
 }
 
 export async function updateEvent(id: string, formData: FormData) {
@@ -201,31 +227,64 @@ export async function updateEvent(id: string, formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.event.update({
-    where: { id },
-    data: {
-      title: data.title,
-      description: data.description || null,
-      startDate: new Date(data.startDate),
-      endDate: data.endDate ? new Date(data.endDate) : null,
-      location: data.location || "AG Wuse, 53 Accra Street, Wuse Zone 5",
-      type: data.type as "SERVICE" | "REVIVAL" | "CONFERENCE" | "OUTREACH" | "HARVEST" | "OTHER",
-      imageUrl: data.imageUrl || null,
-      isPublished: data.isPublished === "on",
-    },
-  });
+  try {
+    const existing = await prisma.event.findUnique({ where: { id } });
+    if (!existing) {
+      return { success: false, error: "Event not found" };
+    }
 
-  revalidatePath("/admin/content/events");
-  revalidatePath("/events");
-  return { success: true };
+    const newImage = data.imageUrl || null;
+    if (existing.imageUrl && existing.imageUrl !== newImage) {
+      const oldImage = existing.imageUrl;
+      after(async () => {
+        await deleteOwnedBlobs([oldImage]);
+      });
+    }
+
+    await prisma.event.update({
+      where: { id },
+      data: {
+        title: data.title.trim(),
+        description: data.description?.trim() || null,
+        startDate: data.startDate,
+        endDate: data.endDate,
+        location: data.location || "AG Wuse, 53 Accra Street, Wuse Zone 5",
+        type: data.type as "SERVICE" | "REVIVAL" | "CONFERENCE" | "OUTREACH" | "HARVEST" | "OTHER",
+        imageUrl: newImage,
+        isPublished: data.isPublished === "on",
+      },
+    });
+
+    revalidateEvent(id);
+    return { success: true };
+  } catch (err) {
+    console.error("updateEvent error:", err);
+    return { success: false, error: "Failed to update event. Please try again." };
+  }
 }
 
 export async function deleteEvent(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
-  await prisma.event.delete({ where: { id } });
-  revalidatePath("/admin/content/events");
-  revalidatePath("/events");
-  return { success: true };
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  try {
+    const deleted = await prisma.event.delete({ where: { id } });
+    await writeAuditLog({
+      action: "DELETE_EVENT",
+      entity: "Event",
+      entityId: id,
+      userId: session.user.id,
+      details: { title: deleted.title },
+    });
+    if (deleted.imageUrl) {
+      after(async () => {
+        await deleteOwnedBlobs([deleted.imageUrl]);
+      });
+    }
+    revalidateEvent(id);
+    return { success: true };
+  } catch (err) {
+    console.error("deleteEvent error:", err);
+    return { success: false, error: "Failed to delete event." };
+  }
 }
 
 // ============================================================
@@ -235,48 +294,60 @@ export async function deleteEvent(id: string) {
 export async function createGalleryImage(formData: FormData) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
-  const url = formData.get("url") as string;
-  const caption = (formData.get("caption") as string) || null;
-  const albumName = (formData.get("albumName") as string) || null;
-
-  if (!url) {
-    return { success: false, error: "Image URL is required" };
-  }
-
-  if (!url.startsWith("https://")) {
-    return { success: false, error: "Image URL must use HTTPS" };
-  }
-
-  await prisma.galleryImage.create({
-    data: { url, caption, albumName },
+  const parsed = galleryImageSchema.safeParse({
+    imageUrl: (formData.get("url") as string) ?? "",
+    caption: (formData.get("caption") as string) || null,
+    albumName: (formData.get("albumName") as string) || null,
   });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message };
+  }
+  const { imageUrl, caption, albumName } = parsed.data;
 
-  revalidatePath("/admin/content/gallery");
-  revalidatePath("/gallery");
-  return { success: true };
+  try {
+    await prisma.galleryImage.create({
+      data: {
+        url: imageUrl,
+        caption: caption ? caption.trim() : null,
+        albumName: albumName ? albumName.trim() : null,
+      },
+    });
+
+    revalidateGallery();
+    return { success: true };
+  } catch (err) {
+    console.error("createGalleryImage error:", err);
+    return { success: false, error: "Failed to save gallery image." };
+  }
 }
 
 export async function deleteGalleryImage(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
-  await prisma.galleryImage.delete({ where: { id } });
-  revalidatePath("/admin/content/gallery");
-  revalidatePath("/gallery");
-  return { success: true };
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  try {
+    const deleted = await prisma.galleryImage.delete({ where: { id } });
+    await writeAuditLog({
+      action: "DELETE_GALLERY_IMAGE",
+      entity: "GalleryImage",
+      entityId: id,
+      userId: session.user.id,
+      details: { url: deleted.url, caption: deleted.caption },
+    });
+    if (deleted.url) {
+      after(async () => {
+        await deleteOwnedBlobs([deleted.url, deleted.thumbnailUrl]);
+      });
+    }
+    revalidateGallery();
+    return { success: true };
+  } catch (err) {
+    console.error("deleteGalleryImage error:", err);
+    return { success: false, error: "Failed to delete gallery image." };
+  }
 }
 
 // ============================================================
 // SERMONS
 // ============================================================
-
-const sermonSchema = z.object({
-  title: z.string().min(2, { error: "Title is required" }),
-  speaker: z.string().min(2, { error: "Speaker is required" }),
-  description: z.string().optional(),
-  date: z.string().min(1, { error: "Date is required" }),
-  audioUrl: z.string().optional(),
-  videoUrl: z.string().optional(),
-  seriesName: z.string().optional(),
-});
 
 export async function createSermon(formData: FormData) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
@@ -298,21 +369,25 @@ export async function createSermon(formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.sermon.create({
-    data: {
-      title: data.title,
-      speaker: data.speaker,
-      description: data.description || null,
-      date: new Date(data.date),
-      audioUrl: data.audioUrl || null,
-      videoUrl: data.videoUrl || null,
-      seriesName: data.seriesName || null,
-    },
-  });
+  try {
+    await prisma.sermon.create({
+      data: {
+        title: data.title.trim(),
+        speaker: data.speaker.trim(),
+        description: data.description?.trim() || null,
+        date: new Date(data.date),
+        audioUrl: data.audioUrl || null,
+        videoUrl: data.videoUrl || null,
+        seriesName: data.seriesName ? data.seriesName.trim() : null,
+      },
+    });
 
-  revalidatePath("/admin/content/sermons");
-  revalidatePath("/sermons");
-  return { success: true };
+    revalidateSermon();
+    return { success: true };
+  } catch (err) {
+    console.error("createSermon error:", err);
+    return { success: false, error: "Failed to create sermon. Please try again." };
+  }
 }
 
 export async function updateSermon(id: string, formData: FormData) {
@@ -335,30 +410,63 @@ export async function updateSermon(id: string, formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.sermon.update({
-    where: { id },
-    data: {
-      title: data.title,
-      speaker: data.speaker,
-      description: data.description || null,
-      date: new Date(data.date),
-      audioUrl: data.audioUrl || null,
-      videoUrl: data.videoUrl || null,
-      seriesName: data.seriesName || null,
-    },
-  });
+  try {
+    const existing = await prisma.sermon.findUnique({ where: { id } });
+    if (!existing) {
+      return { success: false, error: "Sermon not found" };
+    }
 
-  revalidatePath("/admin/content/sermons");
-  revalidatePath("/sermons");
-  return { success: true };
+    const newAudio = data.audioUrl || null;
+    if (existing.audioUrl && existing.audioUrl !== newAudio) {
+      const oldAudio = existing.audioUrl;
+      after(async () => {
+        await deleteOwnedBlobs([oldAudio]);
+      });
+    }
+
+    await prisma.sermon.update({
+      where: { id },
+      data: {
+        title: data.title.trim(),
+        speaker: data.speaker.trim(),
+        description: data.description?.trim() || null,
+        date: new Date(data.date),
+        audioUrl: newAudio,
+        videoUrl: data.videoUrl || null,
+        seriesName: data.seriesName ? data.seriesName.trim() : null,
+      },
+    });
+
+    revalidateSermon();
+    return { success: true };
+  } catch (err) {
+    console.error("updateSermon error:", err);
+    return { success: false, error: "Failed to update sermon. Please try again." };
+  }
 }
 
 export async function deleteSermon(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
-  await prisma.sermon.delete({ where: { id } });
-  revalidatePath("/admin/content/sermons");
-  revalidatePath("/sermons");
-  return { success: true };
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  try {
+    const deleted = await prisma.sermon.delete({ where: { id } });
+    await writeAuditLog({
+      action: "DELETE_SERMON",
+      entity: "Sermon",
+      entityId: id,
+      userId: session.user.id,
+      details: { title: deleted.title, speaker: deleted.speaker },
+    });
+    if (deleted.audioUrl) {
+      after(async () => {
+        await deleteOwnedBlobs([deleted.audioUrl]);
+      });
+    }
+    revalidateSermon();
+    return { success: true };
+  } catch (err) {
+    console.error("deleteSermon error:", err);
+    return { success: false, error: "Failed to delete sermon." };
+  }
 }
 
 // ============================================================
@@ -367,35 +475,40 @@ export async function deleteSermon(id: string) {
 
 export async function approveSubmission(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
-  await prisma.submission.update({
-    where: { id },
-    data: { status: "APPROVED", isPublic: true },
-  });
-  revalidatePath("/admin/content/moderation");
-  revalidatePath("/testimony");
-  return { success: true };
+  try {
+    await prisma.submission.update({
+      where: { id },
+      // Respect the submitter's choice: approval never makes a private submission public.
+      data: { status: "APPROVED" },
+    });
+    revalidatePath("/admin/content/moderation");
+    revalidatePath("/testimony");
+    return { success: true };
+  } catch (err) {
+    console.error("approveSubmission error:", err);
+    return { success: false, error: "Failed to approve submission." };
+  }
 }
 
 export async function archiveSubmission(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
-  await prisma.submission.update({
-    where: { id },
-    data: { status: "ARCHIVED" },
-  });
-  revalidatePath("/admin/content/moderation");
-  return { success: true };
+  try {
+    await prisma.submission.update({
+      where: { id },
+      data: { status: "ARCHIVED" },
+    });
+    revalidatePath("/admin/content/moderation");
+    revalidatePath("/testimony");
+    return { success: true };
+  } catch (err) {
+    console.error("archiveSubmission error:", err);
+    return { success: false, error: "Failed to archive submission." };
+  }
 }
 
 // ============================================================
 // DEPARTMENTS
 // ============================================================
-
-const departmentSchema = z.object({
-  name: z.string().min(2, { error: "Name is required" }),
-  description: z.string().optional(),
-  category: z.enum(["MINISTRY", "COMMITTEE", "CHOIR", "OUTREACH"]),
-  leaderId: z.string().optional(),
-});
 
 export async function createDepartment(formData: FormData) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
@@ -414,18 +527,24 @@ export async function createDepartment(formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.department.create({
-    data: {
-      name: data.name,
-      description: data.description || null,
-      category: data.category as "MINISTRY" | "COMMITTEE" | "CHOIR" | "OUTREACH",
-      leaderId: data.leaderId || null,
-    },
-  });
+  try {
+    await prisma.department.create({
+      data: {
+        name: data.name.trim(),
+        description: data.description?.trim() || null,
+        category: data.category as "MINISTRY" | "COMMITTEE" | "CHOIR" | "OUTREACH",
+        leaderId: data.leaderId || null,
+      },
+    });
 
-  revalidatePath("/admin/settings/departments");
-  revalidatePath("/departments");
-  return { success: true };
+    revalidatePath("/admin/settings/departments");
+    revalidatePath("/departments");
+    revalidatePath("/leaders");
+    return { success: true };
+  } catch (err) {
+    console.error("createDepartment error:", err);
+    return { success: false, error: "Failed to create department. Name may already be in use." };
+  }
 }
 
 export async function updateDepartment(id: string, formData: FormData) {
@@ -436,6 +555,7 @@ export async function updateDepartment(id: string, formData: FormData) {
     description: (formData.get("description") as string) || undefined,
     category: formData.get("category") as string,
     leaderId: (formData.get("leaderId") as string) || undefined,
+    isActive: formData.get("isActive") !== "false",
   };
 
   const parsed = departmentSchema.safeParse(raw);
@@ -445,73 +565,53 @@ export async function updateDepartment(id: string, formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.department.update({
-    where: { id },
-    data: {
-      name: data.name,
-      description: data.description || null,
-      category: data.category as "MINISTRY" | "COMMITTEE" | "CHOIR" | "OUTREACH",
-      leaderId: data.leaderId || null,
-    },
-  });
+  try {
+    await prisma.department.update({
+      where: { id },
+      data: {
+        name: data.name.trim(),
+        description: data.description?.trim() || null,
+        category: data.category as "MINISTRY" | "COMMITTEE" | "CHOIR" | "OUTREACH",
+        leaderId: data.leaderId || null,
+        isActive: data.isActive ?? true,
+      },
+    });
 
-  revalidatePath("/admin/settings/departments");
-  revalidatePath("/departments");
-  return { success: true };
+    revalidatePath("/admin/settings/departments");
+    revalidatePath("/departments");
+    revalidatePath("/leaders");
+    return { success: true };
+  } catch (err) {
+    console.error("updateDepartment error:", err);
+    return { success: false, error: "Failed to update department. Name may already be in use." };
+  }
 }
 
 export async function deleteDepartment(id: string) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
-  await prisma.department.delete({ where: { id } });
-  revalidatePath("/admin/settings/departments");
-  revalidatePath("/departments");
-  return { success: true };
-}
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Nullify departmentId for any members assigned to this department
+      await tx.user.updateMany({
+        where: { departmentId: id },
+        data: { departmentId: null },
+      });
+      await tx.department.delete({ where: { id } });
+    });
 
-// ============================================================
-// CHURCH SETTINGS
-// ============================================================
-
-export async function updateChurchSetting(key: string, value: string) {
-  await requireRole(["SUPER_ADMIN"]);
-  await prisma.churchSettings.upsert({
-    where: { key },
-    create: { key, value },
-    update: { value },
-  });
-  revalidatePath("/admin/settings");
-  return { success: true };
+    revalidatePath("/admin/settings/departments");
+    revalidatePath("/departments");
+    revalidatePath("/leaders");
+    return { success: true };
+  } catch (err) {
+    console.error("deleteDepartment error:", err);
+    return { success: false, error: "Failed to delete department." };
+  }
 }
 
 // ============================================================
 // LIVE STREAM
 // ============================================================
-
-const YOUTUBE_EMBED_PREFIXES = [
-  "https://www.youtube.com/embed/",
-  "https://youtube.com/embed/",
-  "https://www.youtube-nocookie.com/embed/",
-];
-const FACEBOOK_EMBED_PREFIX = "https://www.facebook.com/plugins/video.php";
-
-const liveStreamSchema = z.object({
-  youtubeUrl: z
-    .string()
-    .optional()
-    .refine(
-      (v) => !v || YOUTUBE_EMBED_PREFIXES.some((p) => v.startsWith(p)),
-      { error: "YouTube URL must start with https://www.youtube.com/embed/" }
-    ),
-  facebookUrl: z
-    .string()
-    .optional()
-    .refine((v) => !v || v.startsWith(FACEBOOK_EMBED_PREFIX), {
-      error: "Facebook URL must start with https://www.facebook.com/plugins/video.php",
-    }),
-  isLive: z.string().optional(),
-  title: z.string().optional(),
-  description: z.string().optional(),
-});
 
 export async function updateLiveStreamConfig(formData: FormData) {
   await requireRole(["ADMIN", "SUPER_ADMIN"]);
@@ -524,26 +624,31 @@ export async function updateLiveStreamConfig(formData: FormData) {
 
   const data = parsed.data;
 
-  await prisma.liveStreamConfig.upsert({
-    where: { id: "default" },
-    create: {
-      id: "default",
-      youtubeUrl: data.youtubeUrl || null,
-      facebookUrl: data.facebookUrl || null,
-      isLive: data.isLive === "on",
-      title: data.title || null,
-      description: data.description || null,
-    },
-    update: {
-      youtubeUrl: data.youtubeUrl || null,
-      facebookUrl: data.facebookUrl || null,
-      isLive: data.isLive === "on",
-      title: data.title || null,
-      description: data.description || null,
-    },
-  });
+  try {
+    await prisma.liveStreamConfig.upsert({
+      where: { id: "default" },
+      create: {
+        id: "default",
+        youtubeUrl: data.youtubeUrl || null,
+        facebookUrl: data.facebookUrl || null,
+        isLive: data.isLive === "on",
+        title: data.title ? data.title.trim() : null,
+        description: data.description?.trim() || null,
+      },
+      update: {
+        youtubeUrl: data.youtubeUrl || null,
+        facebookUrl: data.facebookUrl || null,
+        isLive: data.isLive === "on",
+        title: data.title ? data.title.trim() : null,
+        description: data.description?.trim() || null,
+      },
+    });
 
-  revalidatePath("/admin/content/livestream");
-  revalidatePath("/live");
-  return { success: true };
+    revalidatePath("/admin/content/livestream");
+    revalidatePath("/live");
+    return { success: true };
+  } catch (err) {
+    console.error("updateLiveStreamConfig error:", err);
+    return { success: false, error: "Failed to update live stream configuration." };
+  }
 }

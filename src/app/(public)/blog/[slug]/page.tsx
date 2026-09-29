@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { MediaImage } from "@/components/public/media-image";
+import { BlogPostJsonLd } from "@/components/seo/json-ld";
+
+import { getBlogPostBySlug } from "@/lib/data/content";
 
 export async function generateMetadata({
   params,
@@ -13,9 +15,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const post = await prisma.blogPost.findUnique({
-    where: { slug, published: true },
-  });
+  const post = await getBlogPostBySlug(slug);
 
   if (!post) return { title: "Post Not Found" };
 
@@ -32,15 +32,13 @@ export default async function BlogPostPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = await prisma.blogPost.findUnique({
-    where: { slug, published: true },
-    include: { author: { select: { firstName: true, lastName: true } } },
-  });
+  const post = await getBlogPostBySlug(slug);
 
   if (!post) notFound();
 
   return (
     <div className="px-4 py-16 sm:py-20">
+      <BlogPostJsonLd post={post} />
       <article className="mx-auto max-w-3xl">
         <Link
           href="/blog"

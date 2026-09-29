@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { Event, Sermon } from "@prisma/client";
 import { ArrowRight } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { CHURCH_INFO } from "@/lib/constants";
@@ -12,7 +11,7 @@ import { SermonCard } from "@/components/public/sermon-card";
 import { ScriptureQuote } from "@/components/public/scripture-quote";
 import { CTABanner } from "@/components/public/cta-banner";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 const MINISTRY_TILES = [
   {
@@ -32,20 +31,23 @@ const MINISTRY_TILES = [
   },
 ];
 
+import { withBuildFallback } from "@/lib/build-fallback";
+
 async function getHomeContent() {
-  try {
-    const [events, sermon] = await Promise.all([
-      prisma.event.findMany({
-        where: { isPublished: true, startDate: { gte: new Date() } },
-        orderBy: { startDate: "asc" },
-        take: 3,
-      }),
-      prisma.sermon.findFirst({ orderBy: { date: "desc" } }),
-    ]);
-    return { events, sermon };
-  } catch {
-    return { events: [] as Event[], sermon: null as Sermon | null };
-  }
+  return withBuildFallback(
+    async () => {
+      const [events, sermon] = await Promise.all([
+        prisma.event.findMany({
+          where: { isPublished: true, startDate: { gte: new Date() } },
+          orderBy: { startDate: "asc" },
+          take: 3,
+        }),
+        prisma.sermon.findFirst({ orderBy: { date: "desc" } }),
+      ]);
+      return { events, sermon };
+    },
+    { events: [], sermon: null },
+  );
 }
 
 export default async function HomePage() {

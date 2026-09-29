@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Event } from "@prisma/client";
 import { MapPin } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { CHURCH_TIME_ZONE, lagosDateParts } from "@/lib/tz";
 import { MediaImage } from "./media-image";
 
 interface EventCardProps {
@@ -13,10 +14,10 @@ function DateBlock({ date }: { date: Date }) {
   return (
     <div className="flex w-16 shrink-0 flex-col items-center rounded-2xl bg-gold-soft py-3 text-center">
       <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gold-deep">
-        {date.toLocaleDateString("en-NG", { month: "short" })}
+        {date.toLocaleDateString("en-NG", { month: "short", timeZone: CHURCH_TIME_ZONE })}
       </span>
       <span className="font-display text-3xl font-medium leading-none text-ink">
-        {date.getDate()}
+        {lagosDateParts(date).day}
       </span>
     </div>
   );

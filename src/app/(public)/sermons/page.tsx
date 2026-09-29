@@ -5,18 +5,28 @@ import { Headphones } from "lucide-react";
 import { PageHero } from "@/components/public/page-hero";
 import { SermonCard } from "@/components/public/sermon-card";
 
-export const dynamic = "force-dynamic";
+import { withBuildFallback } from "@/lib/build-fallback";
+
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Sermons",
   description: "Listen to and watch sermons from AG Wuse Church.",
 };
 
+async function getSermons() {
+  return withBuildFallback(
+    () =>
+      prisma.sermon.findMany({
+        orderBy: { date: "desc" },
+        take: 30,
+      }),
+    [],
+  );
+}
+
 export default async function SermonsPage() {
-  const sermons = await prisma.sermon.findMany({
-    orderBy: { date: "desc" },
-    take: 30,
-  });
+  const sermons = await getSermons();
 
   return (
     <>

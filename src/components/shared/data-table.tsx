@@ -1,4 +1,4 @@
-"use client";
+// This is a server component — no hooks are used.
 
 import {
   Table,

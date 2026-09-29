@@ -6,20 +6,29 @@ import { PageHero } from "@/components/public/page-hero";
 import { ScriptureQuote } from "@/components/public/scripture-quote";
 import { SectionHeading } from "@/components/public/section-heading";
 
-export const dynamic = "force-dynamic";
+import { withBuildFallback } from "@/lib/build-fallback";
+
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Share Testimony",
   description: "Share your testimony of what God has done in your life.",
 };
 
+async function getTestimonies() {
+  return withBuildFallback(
+    () =>
+      prisma.submission.findMany({
+        where: { type: "TESTIMONY", status: "APPROVED", isPublic: true },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      }),
+    [],
+  );
+}
+
 export default async function TestimonyPage() {
-  // Fetch approved public testimonies
-  const testimonies = await prisma.submission.findMany({
-    where: { type: "TESTIMONY", status: "APPROVED", isPublic: true },
-    orderBy: { createdAt: "desc" },
-    take: 10,
-  });
+  const testimonies = await getTestimonies();
 
   return (
     <>
@@ -60,7 +69,7 @@ export default async function TestimonyPage() {
                     key={t.id}
                     className="rounded-3xl border-l-4 border-brand-gold bg-paper p-7 shadow-warm"
                   >
-                    <blockquote className="leading-relaxed text-ink-soft">
+                    <blockquote className="whitespace-pre-line leading-relaxed text-ink-soft">
                       {t.content}
                     </blockquote>
                     <figcaption className="mt-4 flex items-center gap-3">

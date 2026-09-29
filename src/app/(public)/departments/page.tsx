@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHero } from "@/components/public/page-hero";
 import { Eyebrow } from "@/components/public/section-heading";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Departments",
@@ -18,14 +18,24 @@ const CATEGORY_LABELS: Record<string, string> = {
   OUTREACH: "Media & Outreach",
 };
 
+import { withBuildFallback } from "@/lib/build-fallback";
+
 const CATEGORY_ORDER = ["MINISTRY", "CHOIR", "COMMITTEE", "OUTREACH"];
 
+async function getDepartmentsData() {
+  return withBuildFallback(
+    () =>
+      prisma.department.findMany({
+        where: { isActive: true },
+        include: { leader: { select: { firstName: true, lastName: true } } },
+        orderBy: { name: "asc" },
+      }),
+    [],
+  );
+}
+
 export default async function DepartmentsPage() {
-  const departments = await prisma.department.findMany({
-    where: { isActive: true },
-    include: { leader: { select: { firstName: true, lastName: true } } },
-    orderBy: { name: "asc" },
-  });
+  const departments = await getDepartmentsData();
 
   const grouped = CATEGORY_ORDER.map((cat) => ({
     category: cat,

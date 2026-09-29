@@ -1,11 +1,20 @@
 "use server";
 
 import { hash } from "bcryptjs";
-import { randomBytes } from "crypto";
+import { after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { signIn } from "@/lib/auth";
 import { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema } from "@/lib/validations/auth";
-import { sendVerificationEmail, sendPasswordResetEmail } from "@/lib/email/send-email";
+import {
+  sendVerificationEmail,
+  sendPasswordResetEmail,
+  sendNewRegistrationEmail,
+  sendRegistrationAttemptEmail,
+} from "@/lib/email/send";
+import { getChurchInfo } from "@/lib/settings";
+import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
+import { revokeSessions } from "@/lib/authz/revoke";
+import { createToken, consumeToken, normalizeEmail } from "@/lib/tokens";
 import { AuthError } from "next-auth";
 
 export type AuthActionResult = {
@@ -14,6 +23,12 @@ export type AuthActionResult = {
 };
 
 export async function registerUser(formData: FormData): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_register", ip, 5, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
+  }
+
   const raw = {
     firstName: formData.get("firstName") as string,
     lastName: formData.get("lastName") as string,
@@ -30,49 +45,139 @@ export async function registerUser(formData: FormData): Promise<AuthActionResult
   }
 
   const { firstName, lastName, email, phone, password } = parsed.data;
+  const normalized = normalizeEmail(email);
 
-  // Check if user already exists
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return { success: false, error: "An account with this email already exists" };
-  }
+  try {
+    // Check if user already exists — return success to prevent email enumeration,
+    // but alert the existing account holder asynchronously.
+    const existing = await prisma.user.findUnique({ where: { email: normalized } });
+    if (existing) {
+      const resetToken = await createToken({
+        email: normalized,
+        type: "PASSWORD_RESET",
+      });
 
-  // Create user
-  const passwordHash = await hash(password, 12);
-  await prisma.user.create({
-    data: {
-      email,
-      passwordHash,
-      firstName,
-      lastName,
-      name: `${firstName} ${lastName}`,
-      phone: phone || null,
-      role: "MEMBER",
-      status: "PENDING",
-    },
-  });
+      const notifyExisting = async () => {
+        try {
+          await sendRegistrationAttemptEmail(normalized, resetToken);
+        } catch (err) {
+          console.error("Non-blocking registration attempt email failed:", err);
+        }
+      };
 
-  // Generate email verification token
-  const token = randomBytes(32).toString("hex");
-  await prisma.token.create({
-    data: {
-      email,
-      token,
+      if (typeof after === "function") {
+        after(notifyExisting);
+      } else {
+        void notifyExisting();
+      }
+
+      return { success: true };
+    }
+
+    // Create user
+    const passwordHash = await hash(password, 12);
+    await prisma.user.create({
+      data: {
+        email: normalized,
+        passwordHash,
+        firstName,
+        lastName,
+        name: `${firstName} ${lastName}`,
+        phone: phone || null,
+        role: "MEMBER",
+        status: "PENDING",
+      },
+    });
+
+    // Generate hashed email verification token
+    const token = await createToken({
+      email: normalized,
       type: "EMAIL_VERIFICATION",
-      expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-    },
-  });
+    });
 
-  // Send verification email
-  const emailResult = await sendVerificationEmail(email, token);
-  if (!emailResult.success) {
-    return { success: false, error: "Failed to send verification email. Please try again." };
+    // Send verification email to registrant
+    const emailResult = await sendVerificationEmail(normalized, token);
+    if (!emailResult.success) {
+      return { success: false, error: "Failed to send verification email. Please try again." };
+    }
+
+    // Notify administrators asynchronously via after()
+    const notifyAdmins = async () => {
+      try {
+        const churchInfo = await getChurchInfo();
+        if (churchInfo.notificationEmails.length > 0) {
+          await sendNewRegistrationEmail(churchInfo.notificationEmails, {
+            name: `${firstName} ${lastName}`,
+            email: normalized,
+            phone: phone || null,
+          });
+        }
+      } catch (adminErr) {
+        console.error("Non-blocking admin registration email error:", adminErr);
+      }
+    };
+
+    if (typeof after === "function") {
+      after(notifyAdmins);
+    } else {
+      void notifyAdmins();
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("registerUser error:", err);
+    return { success: false, error: "An unexpected error occurred during registration. Please try again." };
+  }
+}
+
+export async function resendVerification(formData: FormData): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_resend_verify", ip, 5, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
   }
 
-  return { success: true };
+  const rawEmail = formData.get("email") as string;
+  if (!rawEmail) return { success: true };
+
+  const email = normalizeEmail(rawEmail);
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (user && !user.emailVerified) {
+      const token = await createToken({
+        email,
+        type: "EMAIL_VERIFICATION",
+      });
+
+      const resendTask = async () => {
+        try {
+          await sendVerificationEmail(email, token);
+        } catch (err) {
+          console.error("Failed to resend verification email:", err);
+        }
+      };
+
+      if (typeof after === "function") {
+        after(resendTask);
+      } else {
+        void resendTask();
+      }
+    }
+    return { success: true };
+  } catch (err) {
+    console.error("resendVerification error:", err);
+    return { success: true }; // Non-enumerating
+  }
 }
 
 export async function loginUser(formData: FormData): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_login", ip, 5, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
+  }
+
   const raw = {
     email: formData.get("email") as string,
     password: formData.get("password") as string,
@@ -96,8 +201,11 @@ export async function loginUser(formData: FormData): Promise<AuthActionResult> {
       if (error.cause?.err?.message === "EMAIL_NOT_VERIFIED") {
         return { success: false, error: "Please verify your email before logging in. Check your inbox." };
       }
+      if (error.cause?.err?.message === "RATE_LIMITED") {
+        return { success: false, error: "Too many sign-in attempts. Please wait a few minutes and try again." };
+      }
       if (error.cause?.err?.message === "ACCOUNT_NOT_ACTIVE") {
-        return { success: false, error: "Your account is not active. Please contact the church admin." };
+        return { success: false, error: "Your account is awaiting approval by a church administrator." };
       }
       return { success: false, error: "Invalid email or password" };
     }
@@ -106,33 +214,35 @@ export async function loginUser(formData: FormData): Promise<AuthActionResult> {
 }
 
 export async function verifyEmail(token: string): Promise<AuthActionResult> {
-  const tokenRecord = await prisma.token.findUnique({ where: { token } });
-
-  if (!tokenRecord || tokenRecord.type !== "EMAIL_VERIFICATION") {
-    return { success: false, error: "Invalid verification token" };
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_verify", ip, 10, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
   }
 
-  if (tokenRecord.expires < new Date()) {
-    await prisma.token.delete({ where: { token } });
-    return { success: false, error: "Verification token has expired. Please register again." };
+  const consumed = await consumeToken(token, "EMAIL_VERIFICATION");
+  if (!consumed) {
+    return { success: false, error: "Invalid or expired verification token" };
   }
 
-  // Activate the user
+  // Set emailVerified only — status stays PENDING until admin approves
   await prisma.user.update({
-    where: { email: tokenRecord.email },
+    where: { email: consumed.email },
     data: {
       emailVerified: new Date(),
-      status: "ACTIVE",
     },
   });
-
-  // Delete used token
-  await prisma.token.delete({ where: { token } });
 
   return { success: true };
 }
 
 export async function requestPasswordReset(formData: FormData): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_password_reset_req", ip, 3, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
+  }
+
   const raw = { email: formData.get("email") as string };
 
   const parsed = forgotPasswordSchema.safeParse(raw);
@@ -140,36 +250,48 @@ export async function requestPasswordReset(formData: FormData): Promise<AuthActi
     return { success: false, error: "Please enter a valid email address" };
   }
 
-  const { email } = parsed.data;
+  const normalized = normalizeEmail(parsed.data.email);
 
-  // Always return success to prevent email enumeration
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    return { success: true };
-  }
+  try {
+    // Always return success to prevent email enumeration
+    const user = await prisma.user.findUnique({ where: { email: normalized } });
+    if (!user) {
+      return { success: true };
+    }
 
-  // Delete any existing reset tokens for this email
-  await prisma.token.deleteMany({
-    where: { email, type: "PASSWORD_RESET" },
-  });
-
-  // Generate reset token
-  const token = randomBytes(32).toString("hex");
-  await prisma.token.create({
-    data: {
-      email,
-      token,
+    const token = await createToken({
+      email: normalized,
       type: "PASSWORD_RESET",
-      expires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-    },
-  });
+    });
 
-  await sendPasswordResetEmail(email, token);
+    const sendResetTask = async () => {
+      try {
+        await sendPasswordResetEmail(normalized, token);
+      } catch (err) {
+        console.error("Non-blocking password reset email error:", err);
+      }
+    };
 
-  return { success: true };
+    if (typeof after === "function") {
+      after(sendResetTask);
+    } else {
+      void sendResetTask();
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error("requestPasswordReset error:", err);
+    return { success: true }; // Don't leak details on reset
+  }
 }
 
 export async function resetPassword(formData: FormData): Promise<AuthActionResult> {
+  const ip = await getClientIp();
+  const limitCheck = await checkRateLimit("auth_password_reset", ip, 5, "60 s");
+  if (!limitCheck.success) {
+    return { success: false, error: limitCheck.error };
+  }
+
   const raw = {
     token: formData.get("token") as string,
     password: formData.get("password") as string,
@@ -184,26 +306,25 @@ export async function resetPassword(formData: FormData): Promise<AuthActionResul
 
   const { token, password } = parsed.data;
 
-  const tokenRecord = await prisma.token.findUnique({ where: { token } });
+  try {
+    const consumed = await consumeToken(token, "PASSWORD_RESET");
+    if (!consumed) {
+      return { success: false, error: "Invalid or expired reset token. Please request a new one." };
+    }
 
-  if (!tokenRecord || tokenRecord.type !== "PASSWORD_RESET") {
-    return { success: false, error: "Invalid reset token" };
+    // Update password and revoke existing sessions in transaction
+    const passwordHash = await hash(password, 12);
+    await prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { email: consumed.email },
+        data: { passwordHash },
+      });
+      await revokeSessions(tx, updatedUser.id);
+    });
+
+    return { success: true };
+  } catch (err) {
+    console.error("resetPassword error:", err);
+    return { success: false, error: "Failed to reset password. Please try again." };
   }
-
-  if (tokenRecord.expires < new Date()) {
-    await prisma.token.delete({ where: { token } });
-    return { success: false, error: "Reset token has expired. Please request a new one." };
-  }
-
-  // Update password
-  const passwordHash = await hash(password, 12);
-  await prisma.user.update({
-    where: { email: tokenRecord.email },
-    data: { passwordHash },
-  });
-
-  // Delete used token
-  await prisma.token.delete({ where: { token } });
-
-  return { success: true };
 }

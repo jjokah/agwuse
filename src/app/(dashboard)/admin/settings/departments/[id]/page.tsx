@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { requireRole } from "@/lib/auth";
+import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { DepartmentForm } from "../department-form";
+import { DepartmentRoster } from "./department-roster";
 
 export const metadata: Metadata = { title: "Edit Department" };
 
@@ -14,19 +15,25 @@ export default async function EditDepartmentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
   const { id } = await params;
 
-  const [department, members] = await Promise.all([
-    prisma.department.findUnique({ where: { id } }),
-    prisma.user.findMany({
-      where: { status: "ACTIVE" },
-      select: { id: true, firstName: true, lastName: true },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-    }),
-  ]);
+  const department = await prisma.department.findUnique({
+    where: { id },
+    include: {
+      leader: { select: { firstName: true, lastName: true } },
+      members: {
+        select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
+      },
+    },
+  });
 
   if (!department) notFound();
+
+  const leaderName = department.leader
+    ? `${department.leader.firstName} ${department.leader.lastName}`
+    : undefined;
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -37,10 +44,25 @@ export default async function EditDepartmentPage({
         <ArrowLeft className="size-4" />
         Back to Departments
       </Link>
+
       <Card>
-        <CardHeader><CardTitle>Edit Department</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Edit Department</CardTitle>
+        </CardHeader>
         <CardContent>
-          <DepartmentForm department={department} members={members} />
+          <DepartmentForm department={department} leaderName={leaderName} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Department Roster</CardTitle>
+          <CardDescription>
+            Manage members assigned to this department ({department.members.length} members).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <DepartmentRoster departmentId={department.id} members={department.members} />
         </CardContent>
       </Card>
     </div>

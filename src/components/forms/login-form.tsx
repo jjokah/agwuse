@@ -1,17 +1,21 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginUser } from "@/lib/actions/auth-actions";
+import { safeCallbackUrl } from "@/lib/safe-redirect";
 
 export function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const targetUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
 
   async function handleSubmit(formData: FormData) {
     setError("");
@@ -20,7 +24,7 @@ export function LoginForm() {
     try {
       const result = await loginUser(formData);
       if (result.success) {
-        router.push("/dashboard");
+        router.push(targetUrl);
         router.refresh();
       } else {
         setError(result.error || "Login failed");

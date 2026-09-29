@@ -131,7 +131,7 @@ export default function AboutPage() {
         eyebrow="Come and See"
         title="Worship with us this week"
         primary={{ label: "Weekly Activities", href: "/activities" }}
-        secondary={{ label: "Meet Our Ministers", href: "/ministers" }}
+        secondary={{ label: "Meet Our Leaders", href: "/leaders" }}
       />
     </>
   );
