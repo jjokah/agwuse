@@ -38,31 +38,32 @@ const MINISTERS = [
 
 const BOARD_MEMBERS = [
   {
-    name: "Elder Gabriel Ebemiele",
-    role: "Board Member",
-    image: "/images/board/gabriel-ebemiele.png",
-  },
-  {
-    name: "Elder Bernard Oshiogwehom",
-    role: "Board Member (Pioneer)",
-    image: "/images/board/bernard-oshiogwehom.png",
-  },
-  {
     name: "Elder Emeka Onyiriuka",
     role: "Secretary",
     image: "/images/board/emeka-onyiriuka.png",
   },
   {
-    name: "Elder Solomon Achibong",
-    role: "Treasurer (Fellow, ICAN)",
+    name: "Elder Solomon Archibon",
+    role: "Treasurer",
     image: "/images/board/solomon-achibong.png",
   },
   {
+    name: "Elder Anderson Edeh",
+    role: "Financial Secretary",
+    image: null,
+  },
+  {
+    name: "Elder Gabriel Ebamiele",
+    role: "Member",
+    image: "/images/board/gabriel-ebemiele.png",
+  },
+  { name: "Elder Pius Uduhirinwa", role: "Member", image: null },
+  { name: "Elder Emmanuel Okpanku", role: "Member", image: null },
+  {
     name: "Elder Peter Odeh",
-    role: "Board Member",
+    role: "Member",
     image: "/images/board/peter-odeh.png",
   },
-  { name: "Elder Sunday Okezie", role: "Board Member", image: null },
 ];
 
 /** Departmental heads are DB-backed, but ministers and the board are static.
