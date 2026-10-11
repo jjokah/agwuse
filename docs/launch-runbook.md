@@ -8,7 +8,9 @@ Configure [Node.js 24 in Vercel](https://vercel.com/docs/functions/runtimes/node
 
 Set `DATABASE_URL` to the application's pooled PostgreSQL connection and `DIRECT_DATABASE_URL` to the direct connection used by migrations. Choose `DATABASE_POOL_MAX` for the provider's connection budget across server instances (default 5 per instance). Use TLS as required by the database provider.
 
-Set `AUTH_SECRET` to a unique random value, `AUTH_URL` and `NEXT_PUBLIC_APP_URL` to the deployment origin. Configure Auth.js trusted-host behavior only for the trusted Vercel host. Production startup rejects missing authentication/database configuration and email logging or missing Resend delivery credentials. `/api/health/ready` checks PostgreSQL and returns only `{"status":"healthy"}` or `{"status":"unavailable"}` (503); it does not expose connection details.
+Set `AUTH_SECRET` to a unique random value, `AUTH_URL` and `NEXT_PUBLIC_APP_URL` to the deployment origin. Configure Auth.js trusted-host behavior only for the trusted Vercel host. Production startup rejects missing authentication/database configuration. Production email operations reject logging or missing Resend delivery credentials. `/api/health/ready` checks PostgreSQL and returns only `{"status":"healthy"}` or `{"status":"unavailable"}` (503); it does not expose connection details.
+
+Email configuration failures emit an `email_configuration_invalid` startup log and block email operations with explicit errors; they do not prevent unrelated pages from starting. Fix production-scoped email settings and redeploy when this log appears.
 
 For email, set `EMAIL_TRANSPORT=resend`, a valid `RESEND_API_KEY`, and `EMAIL_FROM` on a verified domain. Verify DNS and delivery in staging. [Resend idempotency keys](https://resend.com/changelog/idempotency-keys) are passed as SDK request options. Local `EMAIL_TRANSPORT=log` prints the full plain-text message, including verification/reset links, to the server terminal. Logging is disabled in production. Failed delivery is shown in recovery forms; users can retry `/resend-verification`. Email verification confirms the address; administrator approval is a separate step.
 

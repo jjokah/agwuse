@@ -10,6 +10,7 @@ import { GiftReceiptEmail } from "@/emails/gift-receipt";
 import { NewRegistrationEmail } from "@/emails/new-registration";
 import { NewSubmissionEmail } from "@/emails/new-submission";
 import { RegistrationAttemptEmail } from "@/emails/registration-attempt";
+import { productionEmailConfigurationError } from "@/lib/email/config";
 
 export type EmailTransport = "resend" | "log";
 
@@ -52,9 +53,13 @@ export async function sendEmail({
   }
 
   const isProd = process.env.NODE_ENV === "production";
+  const configurationError = isProd ? productionEmailConfigurationError(process.env) : undefined;
+  if (configurationError) {
+    console.error(JSON.stringify({ event: "email_delivery_failed", reason: configurationError }));
+    return { success: false, error: configurationError };
+  }
 
   if (transport === "log") {
-    if (isProd) return { success: false, error: "Logging email transport is disabled in production" };
     console.log(
       `[EMAIL LOG] To: ${recipients.join(", ")} | Subject: "${subject}" | Idempotency: ${idempotencyKey || "none"}`
     );
@@ -71,9 +76,6 @@ export async function sendEmail({
   }
 
   const from = getFromEmail();
-  if (isProd && (!process.env.EMAIL_FROM || process.env.EMAIL_FROM.includes("magnisale.com"))) {
-    console.warn(`[EMAIL WARNING] Using unverified or default EMAIL_FROM in production: ${from}`);
-  }
 
   try {
     const resend = new Resend(apiKey);

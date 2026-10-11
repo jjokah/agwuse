@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { productionEmailConfigurationError } from "@/lib/email/config";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -41,9 +42,9 @@ export function validateEnv(): Env {
 
   // Production-specific security checks
   if (result.data.NODE_ENV === "production" && !isBuildPhase && !isTest) {
-    if (result.data.EMAIL_TRANSPORT === "log" || !result.data.RESEND_API_KEY?.startsWith("re_") ||
-      !result.data.EMAIL_FROM || !/@[^\s<>]+\.[^\s<>]+/.test(result.data.EMAIL_FROM)) {
-      throw new Error("Production requires Resend delivery, a valid RESEND_API_KEY, and EMAIL_FROM.");
+    const emailError = productionEmailConfigurationError(result.data);
+    if (emailError) {
+      console.error(JSON.stringify({ event: "email_configuration_invalid", reason: emailError }));
     }
     if (!result.data.PAYSTACK_SECRET_KEY) {
       console.warn("[WARN] PAYSTACK_SECRET_KEY is not set in production.");

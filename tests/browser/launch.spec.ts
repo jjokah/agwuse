@@ -154,7 +154,10 @@ test("login error messages are announced and recovery form has accessible contro
   await page.goto("/resend-verification");
   const audit = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(audit.violations).toEqual([]);
-  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  // Load the actual persisted theme instead of auditing interpolated transition colors.
+  await page.addInitScript(() => localStorage.setItem("theme", "dark"));
+  await page.reload();
+  await expect(page.locator("html")).toHaveClass(/dark/);
   const darkAudit = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
   expect(darkAudit.violations).toEqual([]);
 });
