@@ -37,13 +37,14 @@ export function LoginForm() {
   }
 
   return (
-    <form action={handleSubmit} className="space-y-4">
+    <form onSubmit={(event) => { event.preventDefault(); void handleSubmit(new FormData(event.currentTarget)); }} aria-busy={loading} className="space-y-4">
       {error && (
         <div role="alert" className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
+      {error.includes("verify your email") && <Link href="/resend-verification" className="block text-sm text-primary hover:underline">Resend verification email</Link>}
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input

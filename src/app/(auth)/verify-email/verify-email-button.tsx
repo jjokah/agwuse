@@ -44,12 +44,12 @@ export function VerifyEmailButton({ token }: { token: string }) {
   if (status === "error") {
     return (
       <div>
-        <p className="mb-4 text-destructive">{error}</p>
+        <p role="alert" className="mb-4 text-destructive">{error}</p>
         <Link
-          href="/register"
+          href="/resend-verification"
           className="text-sm text-primary hover:underline"
         >
-          Register again
+          Resend verification email
         </Link>
       </div>
     );

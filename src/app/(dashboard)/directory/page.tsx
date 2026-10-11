@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
-import { prisma } from "@/lib/prisma";
+import { getDirectoryPage } from "@/lib/data/directory";
+import { scalarParam } from "@/lib/search-params";
 import { requirePageRole } from "@/lib/auth";
 import { MEMBER_ROLES } from "@/lib/authz/roles";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Input } from "@/components/ui/input";
 import { Users } from "lucide-react";
-import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { pageMeta } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
-import type { Prisma } from "@prisma/client";
+
 
 export const metadata: Metadata = {
   title: "Member Directory",
@@ -22,39 +23,8 @@ export default async function DirectoryPage({
   await requirePageRole(MEMBER_ROLES);
 
   const params = await searchParams;
-  const q = params.q?.trim();
-  const { page, pageSize, skip, take } = parsePageParams(params);
-
-  const where: Prisma.UserWhereInput = {
-    status: "ACTIVE",
-    ...(q
-      ? {
-          OR: [
-            { firstName: { contains: q, mode: "insensitive" } },
-            { lastName: { contains: q, mode: "insensitive" } },
-            { email: { contains: q, mode: "insensitive" } },
-          ],
-        }
-      : {}),
-  };
-
-  const [members, total] = await Promise.all([
-    prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        department: { select: { name: true } },
-      },
-      orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
-      skip,
-      take,
-    }),
-    prisma.user.count({ where }),
-  ]);
+  const q = scalarParam(params, "q")?.trim();
+  const { members, total, page, pageSize } = await getDirectoryPage(params);
 
   const meta = pageMeta({ totalItems: total, page, pageSize });
 
@@ -70,8 +40,9 @@ export default async function DirectoryPage({
       {/* Search */}
       <form>
         <Input
+          aria-label="Search member directory"
           name="q"
-          placeholder="Search by name or email..."
+          placeholder="Search names, departments or shared contacts..."
           defaultValue={q || ""}
           className="max-w-sm"
         />
@@ -98,7 +69,7 @@ export default async function DirectoryPage({
                 <p className="font-semibold">
                   {member.firstName} {member.lastName}
                 </p>
-                <p className="text-sm text-muted-foreground">{member.email}</p>
+                {member.email && <p className="text-sm text-muted-foreground">{member.email}</p>}
                 {member.phone && (
                   <p className="text-sm text-muted-foreground">{member.phone}</p>
                 )}

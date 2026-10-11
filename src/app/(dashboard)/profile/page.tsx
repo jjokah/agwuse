@@ -34,6 +34,8 @@ export default async function ProfilePage() {
       memberSince: true,
       image: true,
       profilePhoto: true,
+      directoryShowEmail: true,
+      directoryShowPhone: true,
       department: { select: { name: true } },
     },
   });

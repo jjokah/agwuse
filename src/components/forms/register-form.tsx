@@ -36,10 +36,10 @@ export function RegisterForm() {
         <div className="rounded-md bg-green-50 px-4 py-6 text-green-800 dark:bg-green-900/20 dark:text-green-400">
           <h3 className="mb-2 text-lg font-semibold">Check your email!</h3>
           <p className="text-sm">
-            We&apos;ve sent a verification link to your email address. Please
-            click the link to verify your account.
+            We&apos;ve sent account guidance to your email address. Follow the link in your inbox to continue.
           </p>
         </div>
+        <Link href="/resend-verification" className="block text-sm text-primary hover:underline">Resend verification email</Link>
         <Link href="/login" className="text-sm text-primary hover:underline">
           Back to login
         </Link>
@@ -48,7 +48,7 @@ export function RegisterForm() {
   }
 
   return (
-    <form action={handleSubmit} className="space-y-4">
+    <form onSubmit={(event) => { event.preventDefault(); void handleSubmit(new FormData(event.currentTarget)); }} aria-busy={loading} className="space-y-4">
       {error && (
         <div role="alert" className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}

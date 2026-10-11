@@ -23,6 +23,8 @@ interface ProfileFormProps {
     dateOfBirth: Date | null;
     gender: string | null;
     maritalStatus: string | null;
+    directoryShowEmail: boolean;
+    directoryShowPhone: boolean;
     image?: string | null;
     profilePhoto?: string | null;
   };
@@ -30,9 +32,11 @@ interface ProfileFormProps {
 
 export function ProfileForm({ user }: ProfileFormProps) {
   const router = useRouter();
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(formData: FormData) {
+    setError("");
     setLoading(true);
     try {
       const result = await updateProfile(formData);
@@ -40,17 +44,18 @@ export function ProfileForm({ user }: ProfileFormProps) {
         toast.success("Profile updated successfully");
         router.refresh();
       } else {
-        toast.error(result.error || "Failed to update profile");
+        setError(result.error || "Failed to update profile");
       }
     } catch {
-      toast.error("An unexpected error occurred");
+      setError("An unexpected error occurred");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <form action={handleSubmit} className="space-y-4">
+    <form onSubmit={(event) => { event.preventDefault(); void handleSubmit(new FormData(event.currentTarget)); }} aria-busy={loading} className="space-y-4">
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="space-y-2">
         <Label>Profile Picture</Label>
         <ImageUpload
@@ -129,11 +134,12 @@ export function ProfileForm({ user }: ProfileFormProps) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="gender">Gender</Label>
-          <Select name="gender" defaultValue={user.gender || ""}>
-            <SelectTrigger>
+          <Select name="gender" defaultValue={user.gender || "none"}>
+            <SelectTrigger id="gender">
               <SelectValue placeholder="Select" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="none">Not specified</SelectItem>
               <SelectItem value="MALE">Male</SelectItem>
               <SelectItem value="FEMALE">Female</SelectItem>
             </SelectContent>
@@ -141,11 +147,12 @@ export function ProfileForm({ user }: ProfileFormProps) {
         </div>
         <div className="space-y-2">
           <Label htmlFor="maritalStatus">Marital Status</Label>
-          <Select name="maritalStatus" defaultValue={user.maritalStatus || ""}>
-            <SelectTrigger>
+          <Select name="maritalStatus" defaultValue={user.maritalStatus || "none"}>
+            <SelectTrigger id="maritalStatus">
               <SelectValue placeholder="Select" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="none">Not specified</SelectItem>
               <SelectItem value="SINGLE">Single</SelectItem>
               <SelectItem value="MARRIED">Married</SelectItem>
               <SelectItem value="WIDOWED">Widowed</SelectItem>
@@ -165,6 +172,12 @@ export function ProfileForm({ user }: ProfileFormProps) {
         />
       </div>
 
+      <fieldset className="space-y-3 rounded-md border p-4">
+        <legend className="text-sm font-semibold">Member directory privacy</legend>
+        <p className="text-xs text-muted-foreground">Your name and department are visible to members. Choose which contact details to share. Church administrators and finance staff retain access for their work.</p>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="directoryShowEmail" defaultChecked={user.directoryShowEmail} /> Show my email in the member directory</label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="directoryShowPhone" defaultChecked={user.directoryShowPhone} /> Show my phone in the member directory</label>
+      </fieldset>
       <Button type="submit" disabled={loading}>
         {loading ? "Saving..." : "Save Changes"}
       </Button>

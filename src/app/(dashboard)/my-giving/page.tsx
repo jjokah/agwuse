@@ -8,11 +8,17 @@ import { DataTable, type Column } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { parsePageParams, resolvePage, pageMeta, hrefWithParams, type SearchParamsLike } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
 import { Heart, TrendingUp, Calendar, Download, HandCoins } from "lucide-react";
 import { startOfLagosYear } from "@/lib/tz";
-import { PAYMENT_METHOD_LABELS } from "@/lib/finance/labels";
+import { givingWhere } from "@/lib/finance/giving-filters";
+import { normalizeSearchParams } from "@/lib/search-params";
+import { pledgeDisplayStatus } from "@/lib/finance/pledges";
+import { DownloadButton } from "@/components/shared/download-button";
+import { FilterSelect, FilterSubmit } from "@/components/shared/filter-select";
+import { TRANSACTION_TYPES, PAYMENT_METHODS } from "@/lib/validations/finance";
+import { PAYMENT_METHOD_LABELS, TRANSACTION_TYPE_LABELS } from "@/lib/finance/labels";
 
 export const metadata: Metadata = {
   title: "My Giving",
@@ -78,44 +84,23 @@ const columns: Column<Transaction>[] = [
 export default async function MyGivingPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ page?: string; pageSize?: string }>;
+  searchParams?: Promise<SearchParamsLike>;
 }) {
   const session = await requirePageRole(ALL_ROLES);
 
-  const params = searchParams ? await searchParams : {};
-  const { page, pageSize, skip, take } = parsePageParams(params, { defaultSize: 20 });
-
-  const where = {
-    memberId: session.user.id,
-    type: { not: "EXPENSE" as const },
-    voidedAt: null,
-  };
-
-  const [transactions, aggregate, thisYearAggregate, total, pledges] = await Promise.all([
-    prisma.financialTransaction.findMany({
-      where,
-      orderBy: { date: "desc" },
-      skip,
-      take,
-    }),
-    prisma.financialTransaction.aggregate({
-      where,
-      _sum: { amount: true },
-      _count: true,
-    }),
-    prisma.financialTransaction.aggregate({
-      where: {
-        ...where,
-        date: { gte: startOfLagosYear() },
-      },
-      _sum: { amount: true },
-    }),
-    prisma.financialTransaction.count({ where }),
-    prisma.pledge.findMany({
-      where: { memberId: session.user.id },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  const params = normalizeSearchParams(searchParams ? await searchParams : {});
+  const where = givingWhere(session.user.id, params);
+  const { transactions, aggregate, thisYearAggregate, total, pledges, page, pageSize } = await prisma.$transaction(async (tx) => {
+    const total = await tx.financialTransaction.count({ where });
+    const pagination = resolvePage(parsePageParams(params, { defaultSize: 20 }), total);
+    const [transactions, aggregate, thisYearAggregate, pledges] = await Promise.all([
+      tx.financialTransaction.findMany({ where, orderBy: [{ date: "desc" }, { id: "desc" }], skip: pagination.skip, take: pagination.take }),
+      tx.financialTransaction.aggregate({ where, _sum: { amount: true }, _count: true }),
+      tx.financialTransaction.aggregate({ where: { AND: [where, { date: { gte: startOfLagosYear() } }] }, _sum: { amount: true } }),
+      tx.pledge.findMany({ where: { memberId: session.user.id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] }),
+    ]);
+    return { transactions, aggregate, thisYearAggregate, pledges, total, ...pagination };
+  }, { isolationLevel: "RepeatableRead" });
 
   const meta = pageMeta({ totalItems: total, page, pageSize });
 
@@ -135,20 +120,26 @@ export default async function MyGivingPage({
     paymentMethod: tx.paymentMethod,
   }));
 
-  const now = new Date();
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">My Giving</h1>
+      <form className="flex flex-wrap items-end gap-3">
+        <label className="space-y-1 text-sm">From<input type="date" name="from" defaultValue={params.from} className="block rounded-md border p-2" /></label>
+        <label className="space-y-1 text-sm">To<input type="date" name="to" defaultValue={params.to} className="block rounded-md border p-2" /></label>
+        <FilterSelect name="type" placeholder="All giving types" defaultValue={params.type} options={TRANSACTION_TYPES.filter((type) => type !== "EXPENSE").map((value) => ({ value, label: TRANSACTION_TYPE_LABELS[value] }))} />
+        <FilterSelect name="method" placeholder="All methods" defaultValue={params.method} options={PAYMENT_METHODS.map((value) => ({ value, label: PAYMENT_METHOD_LABELS[value] }))} />
+        <FilterSubmit text="Filter" />
+      </form>
+      <DownloadButton href={hrefWithParams("/api/me/giving/export", params, { page: null, pageSize: null })}>Download CSV</DownloadButton>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
-          title="Total Giving"
+          title="Filtered Giving"
           value={formatCurrency(totalGiving)}
           icon={<Heart />}
         />
         <StatCard
-          title="This Year"
+          title="Filtered This Year"
           value={formatCurrency(thisYearGiving)}
           icon={<TrendingUp />}
         />
@@ -174,9 +165,7 @@ export default async function MyGivingPage({
                 const totalAmt = Number(p.amount);
                 const paidAmt = Number(p.amountPaid);
                 const progress = totalAmt > 0 ? Math.min(100, Math.round((paidAmt / totalAmt) * 100)) : 0;
-                const isOverdue =
-                  p.status === "ACTIVE" && p.endDate && new Date(p.endDate) < now;
-                const displayStatus = isOverdue ? "OVERDUE" : p.status;
+                const displayStatus = pledgeDisplayStatus(p);
 
                 return (
                   <div key={p.id} className="rounded-lg border p-4 space-y-3">

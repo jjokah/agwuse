@@ -26,10 +26,10 @@ export default async function VerifyEmailPage({
             correct link.
           </p>
           <Link
-            href="/login"
+            href="/resend-verification"
             className="mt-4 inline-block text-sm text-primary hover:underline"
           >
-            Go to login
+            Resend verification email
           </Link>
         </CardContent>
       </Card>
