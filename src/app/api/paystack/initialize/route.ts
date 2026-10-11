@@ -1,3 +1,4 @@
+import { toKobo } from "@/lib/finance/payment-data";
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { auth } from "@/lib/auth";
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
 
   // Generate AGW reference and persist PaymentIntent
   const reference = `AGW_${randomUUID().replace(/-/g, "")}`;
-  const amountInKobo = Math.round(Number(data.amount) * 100);
+  const amountInKobo = toKobo(data.amount);
 
   await prisma.paymentIntent.create({
     data: {

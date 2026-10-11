@@ -39,7 +39,7 @@ async function createIntent(amount: number, overrides: Partial<{ type: "TITHE" |
 
 const payment = (amount: number, reference = REFERENCE) => ({
   reference,
-  amount,
+  amount: amount * 100,
   currency: "NGN",
   paid_at: "2026-03-10T09:30:00.000Z",
   customer: { email: "donor@example.test" },
@@ -102,6 +102,20 @@ describe("Paystack recording (integration)", () => {
     expect(await prisma.financialTransaction.count()).toBe(0);
     expect((await prisma.paymentIntent.findUniqueOrThrow({ where: { reference: REFERENCE } })).status).toBe("FAILED");
     expect(await prisma.auditLog.count({ where: { action: "PAYSTACK_INTENT_MISMATCH" } })).toBe(1);
+  });
+
+  it("refuses one kobo less than the intended amount", async () => {
+    await createIntent(1000);
+    expect((await recordPaystackPayment(payment(999.99))).status).toBe("mismatch");
+    expect(await prisma.financialTransaction.count()).toBe(0);
+  });
+
+  it("does not use metadata to select another intent", async () => {
+    await createIntent(1000);
+    const result = await recordPaystackPayment({ ...payment(1000, "OTHER_REF_123456"), metadata: { intentRef: REFERENCE } });
+    expect(result.status).toBe("mismatch");
+    expect(await prisma.financialTransaction.count()).toBe(0);
+    expect((await prisma.paymentIntent.findUniqueOrThrow({ where: { reference: REFERENCE } })).status).toBe("PENDING");
   });
 
   it("records an unmatched payment as a general donation", async () => {

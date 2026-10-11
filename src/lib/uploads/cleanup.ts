@@ -21,7 +21,7 @@ export function isVercelBlobUrl(url: string | null | undefined): boolean {
 export async function deleteOwnedBlobs(
   urls: (string | null | undefined)[]
 ): Promise<{ deleted: number; errors: number }> {
-  const blobUrls = urls.filter((u): u is string => isVercelBlobUrl(u));
+  const blobUrls = [...new Set(urls.filter((u): u is string => isVercelBlobUrl(u)))];
   if (blobUrls.length === 0) {
     return { deleted: 0, errors: 0 };
   }
@@ -35,11 +35,24 @@ export async function deleteOwnedBlobs(
   }
 
   try {
+    const { prisma } = await import("@/lib/prisma");
+    const unreferenced: string[] = [];
+    for (const url of blobUrls) {
+      const counts = await Promise.all([
+        prisma.user.count({ where: { OR: [{ image: url }, { profilePhoto: url }] } }),
+        prisma.blogPost.count({ where: { OR: [{ featuredImage: url }, { content: { contains: url } }] } }),
+        prisma.event.count({ where: { imageUrl: url } }),
+        prisma.galleryImage.count({ where: { OR: [{ url }, { thumbnailUrl: url }] } }),
+        prisma.sermon.count({ where: { OR: [{ audioUrl: url }, { videoUrl: url }, { thumbnailUrl: url }] } }),
+      ]);
+      if (counts.every((count) => count === 0)) unreferenced.push(url);
+    }
+    if (unreferenced.length === 0) return { deleted: 0, errors: 0 };
     const { del } = await import("@vercel/blob");
-    await del(blobUrls, { token });
-    return { deleted: blobUrls.length, errors: 0 };
+    await del(unreferenced, { token });
+    return { deleted: unreferenced.length, errors: 0 };
   } catch (err) {
-    console.error("[BLOB CLEANUP ERROR] Failed to delete blob(s):", err);
+    console.error(JSON.stringify({ event: "asset_cleanup_failed", count: blobUrls.length, reason: err instanceof Error ? err.message : "Unknown failure" }));
     return { deleted: 0, errors: blobUrls.length };
   }
 }

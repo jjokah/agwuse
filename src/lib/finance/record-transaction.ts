@@ -144,7 +144,7 @@ export function scheduleReceiptEmail(
       }
 
       if (email) {
-        await sendGiftReceiptEmail(email, {
+        const result = await sendGiftReceiptEmail(email, {
           receiptNumber,
           amount: formatCurrency(Number(transaction.amount)),
           date: formatDate(transaction.date),
@@ -153,6 +153,7 @@ export function scheduleReceiptEmail(
           memberName,
           idempotencyKey: `receipt-${receiptNumber}`,
         });
+        if (!result.success) console.error(JSON.stringify({ event: "receipt_email_failed", receiptNumber, reason: result.error }));
       }
     } catch (emailErr) {
       console.error("Non-blocking gift receipt email error:", emailErr);

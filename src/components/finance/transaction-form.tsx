@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,7 +66,11 @@ export function TransactionForm({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [txType, setTxType] = useState("");
-  const [selectedMemberId, setSelectedMemberId] = useState("");
+  const [selectedMember, setSelectedMember] = useState<MemberSearchResult | null>(null);
+  const selectedMemberId = selectedMember?.id ?? "";
+  const pledgeRequest = useRef(0);
+  const typeRef = useRef(txType);
+  const [error, setError] = useState("");
   const [memberPledges, setMemberPledges] = useState<ActivePledge[]>([]);
   const [pledgeId, setPledgeId] = useState<string>("none");
 
@@ -76,7 +80,9 @@ export function TransactionForm({
 
   async function handleMemberChange(member: MemberSearchResult | null) {
     const id = member ? member.id : "";
-    setSelectedMemberId(id);
+    const request = ++pledgeRequest.current;
+    setSelectedMember(member);
+    setMemberPledges([]);
     setPledgeId("none");
     if (!id) {
       setMemberPledges([]);
@@ -84,26 +90,30 @@ export function TransactionForm({
     }
     try {
       const pledges = await getMemberActivePledges(id);
+      if (request !== pledgeRequest.current || typeRef.current === "EXPENSE") return;
       setMemberPledges(pledges);
-      if (pledges.length > 0 && isPledgePayment) {
+      if (pledges.length > 0 && typeRef.current === "PLEDGE_PAYMENT") {
         setPledgeId(pledges[0].id);
       }
     } catch {
-      setMemberPledges([]);
+      if (request === pledgeRequest.current) setMemberPledges([]);
     }
   }
 
   async function handleSubmit(formData: FormData) {
     if (isPledgePayment && (!selectedMemberId || pledgeId === "none")) {
-      toast.error("Please select both a church member and their pledge for a pledge payment.");
+      setError("Please select both a church member and their pledge for a pledge payment.");
       return;
     }
 
+    setError("");
     setLoading(true);
-    if (selectedMemberId) {
+    formData.delete("memberId");
+    formData.delete("pledgeId");
+    if (!isExpense && selectedMemberId) {
       formData.set("memberId", selectedMemberId);
     }
-    if (pledgeId && pledgeId !== "none") {
+    if (!isExpense && selectedMemberId && pledgeId !== "none" && memberPledges.some((p) => p.id === pledgeId)) {
       formData.set("pledgeId", pledgeId);
     }
 
@@ -113,17 +123,18 @@ export function TransactionForm({
         toast.success(`Transaction recorded. Receipt: ${result.receiptNumber}`);
         router.push(redirectTo);
       } else {
-        toast.error(result.error || "Failed to record transaction");
+        setError(result.error || "Failed to record transaction");
       }
     } catch {
-      toast.error("An unexpected error occurred");
+      setError("An unexpected error occurred");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <form action={handleSubmit} className="space-y-4">
+    <form onSubmit={(event) => { event.preventDefault(); void handleSubmit(new FormData(event.currentTarget)); }} aria-busy={loading} className="space-y-4">
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="type">Transaction Type *</Label>
@@ -132,7 +143,14 @@ export function TransactionForm({
             required
             onValueChange={(v) => {
               if (typeof v === "string") {
+                typeRef.current = v;
                 setTxType(v);
+                if (v === "EXPENSE") {
+                  ++pledgeRequest.current;
+                  setSelectedMember(null);
+                  setMemberPledges([]);
+                  setPledgeId("none");
+                }
                 if (v === "PLEDGE_PAYMENT" && memberPledges.length > 0 && pledgeId === "none") {
                   setPledgeId(memberPledges[0].id);
                 }
@@ -202,6 +220,8 @@ export function TransactionForm({
             Member {isPledgePayment ? "*" : "(optional)"}
           </Label>
           <MemberCombobox
+            id="memberId"
+            value={selectedMember}
             name="memberId"
             onSelect={handleMemberChange}
             placeholder="Search member by name, email, or phone..."

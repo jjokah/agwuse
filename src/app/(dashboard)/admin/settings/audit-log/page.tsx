@@ -1,3 +1,4 @@
+import { normalizeSearchParams } from "@/lib/search-params";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -6,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { parsePageParams, resolvePage, pageMeta } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
 import { FilterSelect, FilterSubmit } from "@/components/shared/filter-select";
 import {
@@ -31,9 +32,9 @@ export default async function AuditLogPage({
   searchParams: Promise<{ q?: string; entity?: string; page?: string; pageSize?: string }>;
 }) {
   await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
-  const params = await searchParams;
+  const params = normalizeSearchParams(await searchParams);
   const { q, entity } = params;
-  const { page, pageSize, skip, take } = parsePageParams(params);
+
 
   const where: Prisma.AuditLogWhereInput = {};
   if (entity) where.entity = entity;
@@ -46,20 +47,15 @@ export default async function AuditLogPage({
     ];
   }
 
-  const [logs, total, entityGroups] = await Promise.all([
-    prisma.auditLog.findMany({
-      where,
-      include: { user: { select: { firstName: true, lastName: true } } },
-      orderBy: { createdAt: "desc" },
-      skip,
-      take,
-    }),
-    prisma.auditLog.count({ where }),
-    prisma.auditLog.groupBy({
-      by: ["entity"],
-      orderBy: { entity: "asc" },
-    }),
-  ]);
+  const { logs, total, entityGroups, page, pageSize } = await prisma.$transaction(async (tx) => {
+    const total = await tx.auditLog.count({ where });
+    const { page, pageSize, skip, take } = resolvePage(parsePageParams(params), total);
+    const [logs, entityGroups] = await Promise.all([
+      tx.auditLog.findMany({ where, include: { user: { select: { firstName: true, lastName: true } } }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip, take }),
+      tx.auditLog.groupBy({ by: ["entity"], orderBy: { entity: "asc" } }),
+    ]);
+    return { logs, total, entityGroups, page, pageSize };
+  }, { isolationLevel: "RepeatableRead" });
 
   const meta = pageMeta({ totalItems: total, page, pageSize });
   const entityOptions = entityGroups.map((g) => ({

@@ -56,6 +56,7 @@ const authPaths = new Set([
   "/verify-email",
   "/forgot-password",
   "/reset-password",
+  "/resend-verification",
 ]);
 
 /**
@@ -67,6 +68,7 @@ const authPaths = new Set([
  *   upload-completed callback arrives without cookies and is signature-verified.
  */
 const publicApiPrefixes = [
+  "/api/health/ready",
   "/api/auth/",
   "/api/paystack/initialize",
   "/api/paystack/verify",

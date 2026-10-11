@@ -1,3 +1,4 @@
+import { normalizeSearchParams } from "@/lib/search-params";
 import type { Metadata } from "next";
 import { requirePageRole } from "@/lib/auth";
 import { parseDateRange } from "@/lib/date-params";
@@ -21,14 +22,14 @@ export default async function FinanceReportsPage({
   }>;
 }) {
   await requirePageRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
-  const { from, to, report } = await searchParams;
+  const { from, to, report } = normalizeSearchParams(await searchParams);
 
   const { from: fromDate, to: toDate } = parseDateRange({ from, to });
   const data = await getFinanceReportData(fromDate, toDate);
 
   const fromStr = toLagosDateString(fromDate);
   const toStr = toLagosDateString(toDate);
-  const reportType = report || "summary";
+  const reportType = report && ["summary", "income", "expense"].includes(report) ? report : "summary";
 
   return (
     <div className="space-y-6">

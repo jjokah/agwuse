@@ -1,14 +1,17 @@
 import { z } from "zod/v4";
+import { isCalendarDay } from "@/lib/calendar";
 
 export const updateProfileSchema = z.object({
-  firstName: z.string().min(2, { error: "First name is required" }).max(100),
-  lastName: z.string().min(2, { error: "Last name is required" }).max(100),
+  firstName: z.string().trim().min(2, { error: "First name is required" }).max(100),
+  lastName: z.string().trim().min(2, { error: "Last name is required" }).max(100),
   phone: z.string().max(30).optional(),
   address: z.string().max(500).optional(),
   occupation: z.string().max(100).optional(),
-  dateOfBirth: z.string().optional(),
-  gender: z.enum(["MALE", "FEMALE"]).optional(),
-  maritalStatus: z.enum(["SINGLE", "MARRIED", "WIDOWED", "DIVORCED"]).optional(),
+  dateOfBirth: z.string().refine((v) => !v || isCalendarDay(v), { error: "Invalid date of birth" }).optional(),
+  gender: z.enum(["MALE", "FEMALE", "none", ""]).optional().transform((v) => !v || v === "none" ? null : v),
+  maritalStatus: z.enum(["SINGLE", "MARRIED", "WIDOWED", "DIVORCED", "none", ""]).optional().transform((v) => !v || v === "none" ? null : v),
+  directoryShowEmail: z.boolean().optional().default(false),
+  directoryShowPhone: z.boolean().optional().default(false),
 });
 
 export const changePasswordSchema = z
@@ -36,7 +39,7 @@ const optionalDateOnly = z
   .optional()
   .transform((v, ctx) => {
     if (!v) return null;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(new Date(v).getTime())) {
+    if (!isCalendarDay(v)) {
       ctx.addIssue({ code: "custom", message: "Invalid date" });
       return z.NEVER;
     }

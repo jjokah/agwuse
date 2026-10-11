@@ -1,9 +1,11 @@
+import { SubmissionStatus, SubmissionType } from "@prisma/client";
+import { normalizeSearchParams } from "@/lib/search-params";
 import type { Metadata } from "next";
 import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { parsePageParams, resolvePage, pageMeta } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
 import { FilterSelect, FilterSubmit } from "@/components/shared/filter-select";
 import {
@@ -17,7 +19,7 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { MessageSquare } from "lucide-react";
 import { ModerationActions } from "./moderation-actions";
-import type { SubmissionStatus, SubmissionType, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
   title: "Moderation Queue",
@@ -40,28 +42,30 @@ export default async function ModerationPage({
   searchParams: Promise<{ status?: string; type?: string; page?: string; pageSize?: string }>;
 }) {
   await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
-  const params = await searchParams;
+  const params = normalizeSearchParams(await searchParams);
   const { status, type } = params;
-  const { page, pageSize, skip, take } = parsePageParams(params);
+
 
   const where: Prisma.SubmissionWhereInput = {};
-  if (status) where.status = status as SubmissionStatus;
+  if (status && Object.values(SubmissionStatus).includes(status as SubmissionStatus)) where.status = status as SubmissionStatus;
   else if (status === undefined) where.status = "PENDING";
 
-  if (type) where.type = type as SubmissionType;
+  if (type && Object.values(SubmissionType).includes(type as SubmissionType)) where.type = type as SubmissionType;
 
-  const [submissions, total] = await Promise.all([
-    prisma.submission.findMany({
+  const { submissions, total, page, pageSize } = await prisma.$transaction(async (tx) => {
+    const total = await tx.submission.count({ where });
+    const { page, pageSize, skip, take } = resolvePage(parsePageParams(params), total);
+    const submissions = await tx.submission.findMany({
       where,
       include: {
         submittedBy: { select: { firstName: true, lastName: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
       take,
-    }),
-    prisma.submission.count({ where }),
-  ]);
+    });
+    return { submissions, total, page, pageSize };
+  }, { isolationLevel: "RepeatableRead" });
 
   const meta = pageMeta({ totalItems: total, page, pageSize });
 

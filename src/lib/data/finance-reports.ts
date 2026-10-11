@@ -62,21 +62,21 @@ export async function getFinanceReportData(
     incomeGroups,
     expenseGroups,
     transactions,
-  ] = await Promise.all([
+  ] = await prisma.$transaction((tx) => Promise.all([
     // 1. Total income
-    prisma.financialTransaction.aggregate({
+    tx.financialTransaction.aggregate({
       where: { ...dateFilter, type: { not: "EXPENSE" } },
       _sum: { amount: true },
       _count: true,
     }),
     // 2. Total expense
-    prisma.financialTransaction.aggregate({
+    tx.financialTransaction.aggregate({
       where: { ...dateFilter, type: "EXPENSE" },
       _sum: { amount: true },
       _count: true,
     }),
     // 3. Income grouped by type
-    prisma.financialTransaction.groupBy({
+    tx.financialTransaction.groupBy({
       by: ["type"],
       where: { ...dateFilter, type: { not: "EXPENSE" } },
       _sum: { amount: true },
@@ -84,7 +84,7 @@ export async function getFinanceReportData(
       orderBy: { _sum: { amount: "desc" } },
     }),
     // 4. Expense grouped by their real category (stored in customCategory)
-    prisma.financialTransaction.groupBy({
+    tx.financialTransaction.groupBy({
       by: ["customCategory"],
       where: { ...dateFilter, type: "EXPENSE" },
       _sum: { amount: true },
@@ -92,7 +92,7 @@ export async function getFinanceReportData(
       orderBy: { _sum: { amount: "desc" } },
     }),
     // 5. Transaction list for detail tables and exports
-    prisma.financialTransaction.findMany({
+    tx.financialTransaction.findMany({
       where: dateFilter,
       select: {
         id: true,
@@ -106,10 +106,10 @@ export async function getFinanceReportData(
         notes: true,
         member: { select: { firstName: true, lastName: true } },
       },
-      orderBy: { date: "asc" },
+      orderBy: [{ date: "asc" }, { id: "asc" }],
       take: maxTransactions,
     }),
-  ]);
+  ]), { isolationLevel: "RepeatableRead" });
 
   const totalIncome = incomeAgg._sum.amount ?? new Prisma.Decimal(0);
   const totalExpense = expenseAgg._sum.amount ?? new Prisma.Decimal(0);

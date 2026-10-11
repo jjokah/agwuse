@@ -1,10 +1,12 @@
+import { DepartmentCategory } from "@prisma/client";
+import { normalizeSearchParams } from "@/lib/search-params";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, PlusCircle } from "lucide-react";
 import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
-import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { parsePageParams, resolvePage, pageMeta } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
 import { FilterSelect, FilterSubmit } from "@/components/shared/filter-select";
 import {
@@ -18,7 +20,7 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { Users } from "lucide-react";
 import { DeleteDepartmentButton } from "./delete-department-button";
-import type { DepartmentCategory, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
   title: "Departments",
@@ -37,26 +39,28 @@ export default async function DepartmentsSettingsPage({
   searchParams?: Promise<{ category?: string; page?: string; pageSize?: string }>;
 }) {
   await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
-  const params = searchParams ? await searchParams : {};
+  const params = normalizeSearchParams(searchParams ? await searchParams : {});
   const { category } = params;
-  const { page, pageSize, skip, take } = parsePageParams(params);
+
 
   const where: Prisma.DepartmentWhereInput = {};
-  if (category) where.category = category as DepartmentCategory;
+  if (category && Object.values(DepartmentCategory).includes(category as DepartmentCategory)) where.category = category as DepartmentCategory;
 
-  const [departments, total] = await Promise.all([
-    prisma.department.findMany({
+  const { departments, total, page, pageSize } = await prisma.$transaction(async (tx) => {
+    const total = await tx.department.count({ where });
+    const { page, pageSize, skip, take } = resolvePage(parsePageParams(params), total);
+    const departments = await tx.department.findMany({
       where,
       include: {
         leader: { select: { firstName: true, lastName: true } },
         _count: { select: { members: true } },
       },
-      orderBy: [{ category: "asc" }, { name: "asc" }],
+      orderBy: [{ category: "asc" }, { name: "asc" }, { id: "asc" }],
       skip,
       take,
-    }),
-    prisma.department.count({ where }),
-  ]);
+    });
+    return { departments, total, page, pageSize };
+  }, { isolationLevel: "RepeatableRead" });
 
   const meta = pageMeta({ totalItems: total, page, pageSize });
 

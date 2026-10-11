@@ -11,11 +11,12 @@
  * render on the correct calendar day and fall inside the matching Lagos day range.
  */
 
+import { isCalendarDay } from "@/lib/calendar";
+
 export const CHURCH_TIME_ZONE = "Africa/Lagos";
 export const LAGOS_UTC_OFFSET = "+01:00";
 const LAGOS_OFFSET_MS = 60 * 60 * 1000;
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
 
 function pad(n: number): string {
@@ -45,7 +46,8 @@ export function toLagosDateTimeInputValue(date: Date): string {
  */
 export function parseLagosDateTime(value: string | null | undefined): Date | null {
   const v = value?.trim();
-  if (!v || !DATE_TIME_RE.test(v)) return null;
+  if (!v || !DATE_TIME_RE.test(v) || !isCalendarDay(v.slice(0, 10))) return null;
+  if (Number(v.slice(11, 13)) > 23 || Number(v.slice(14, 16)) > 59 || Number(v.slice(17, 19) || 0) > 59) return null;
   const withSeconds = v.length === 16 ? `${v}:00` : v;
   const date = new Date(`${withSeconds}${LAGOS_UTC_OFFSET}`);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -53,14 +55,14 @@ export function parseLagosDateTime(value: string | null | undefined): Date | nul
 
 /** Start (inclusive) of a Lagos calendar day given as "YYYY-MM-DD". */
 export function lagosDayStart(day: string): Date | null {
-  if (!DATE_RE.test(day)) return null;
+  if (!isCalendarDay(day)) return null;
   const date = new Date(`${day}T00:00:00.000${LAGOS_UTC_OFFSET}`);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
 /** End (inclusive, last millisecond) of a Lagos calendar day given as "YYYY-MM-DD". */
 export function lagosDayEnd(day: string): Date | null {
-  if (!DATE_RE.test(day)) return null;
+  if (!isCalendarDay(day)) return null;
   const date = new Date(`${day}T23:59:59.999${LAGOS_UTC_OFFSET}`);
   return Number.isNaN(date.getTime()) ? null : date;
 }

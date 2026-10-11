@@ -1,5 +1,6 @@
 import { z } from "zod/v4";
 import { Prisma } from "@prisma/client";
+import { isStrictIsoDate } from "@/lib/calendar";
 import { PUBLIC_GIVING_TYPES, PUBLIC_OFFERING_CATEGORIES } from "@/lib/finance/labels";
 
 // Matches standard 2-decimal money strings or numbers up to 1 billion
@@ -22,6 +23,7 @@ export const isoDateSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?)?$/, {
     error: "Date must be a valid ISO date string (YYYY-MM-DD)",
   })
+  .refine(isStrictIsoDate, { error: "Invalid calendar date or UTC time" })
   .transform((val) => new Date(val))
   .refine((date) => !isNaN(date.getTime()), { error: "Invalid date value" });
 
@@ -93,6 +95,8 @@ export const pledgeSchema = z.object({
   startDate: isoDateSchema,
   endDate: isoDateSchema.optional().nullable(),
   memberId: z.string().min(1, { error: "Member is required" }),
+}).refine((data) => !data.endDate || data.endDate >= data.startDate, {
+  error: "End date must be on or after start date", path: ["endDate"],
 });
 
 /**

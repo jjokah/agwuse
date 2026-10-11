@@ -1,6 +1,7 @@
 import "server-only";
 import { Resend } from "resend";
 import type { ReactElement } from "react";
+import { render } from "@react-email/render";
 import { getAbsoluteUrl } from "@/lib/site";
 import { VerifyEmail } from "@/emails/verify";
 import { ResetEmail } from "@/emails/reset";
@@ -53,9 +54,11 @@ export async function sendEmail({
   const isProd = process.env.NODE_ENV === "production";
 
   if (transport === "log") {
+    if (isProd) return { success: false, error: "Logging email transport is disabled in production" };
     console.log(
       `[EMAIL LOG] To: ${recipients.join(", ")} | Subject: "${subject}" | Idempotency: ${idempotencyKey || "none"}`
     );
+    console.log(await render(react, { plainText: true }));
     return { success: true };
   }
 
@@ -63,12 +66,8 @@ export async function sendEmail({
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     const msg = "RESEND_API_KEY is not configured";
-    if (isProd) {
-      console.error(`[FATAL] ${msg} in production email sending.`);
-      return { success: false, error: msg };
-    }
-    console.warn(`[DEV WARNING] ${msg}, falling back to log`);
-    return { success: true };
+    console.error(JSON.stringify({ event: "email_delivery_failed", reason: msg }));
+    return { success: false, error: msg };
   }
 
   const from = getFromEmail();
@@ -83,14 +82,13 @@ export async function sendEmail({
       to: recipients,
       subject,
       react,
-      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
     };
 
-    const { data, error } = await resend.emails.send(options);
+    const { data, error } = await resend.emails.send(options, idempotencyKey ? { idempotencyKey } : undefined);
 
-    if (error) {
-      console.error("Resend send error:", error);
-      return { success: false, error: error.message };
+    if (error || !data?.id) {
+      console.error(JSON.stringify({ event: "email_delivery_failed", reason: error?.message ?? "Missing delivery ID" }));
+      return { success: false, error: error?.message ?? "Email provider did not accept delivery" };
     }
 
     return { success: true, id: data?.id };
@@ -204,12 +202,11 @@ export async function sendNewSubmissionEmail(
 
 export async function sendRegistrationAttemptEmail(
   email: string,
-  resetToken: string
 ): Promise<SendEmailResult> {
-  const resetUrl = getAbsoluteUrl(`/reset-password?token=${resetToken}`);
+  const resetUrl = getAbsoluteUrl("/forgot-password");
   return sendEmail({
     to: email,
-    subject: "Security Alert: Registration attempt on your AG Wuse account",
+    subject: "Account access guidance - AG Wuse",
     react: RegistrationAttemptEmail({ resetUrl }),
   });
 }

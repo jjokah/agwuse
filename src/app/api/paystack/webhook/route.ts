@@ -1,22 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { verifyPaystackSignature } from "@/lib/finance/paystack-signature";
+import { paymentDataSchema } from "@/lib/finance/payment-data";
 import { recordPaystackPayment } from "@/lib/finance/paystack";
 
 const chargePayloadSchema = z.object({
   event: z.string(),
-  data: z.object({
-    reference: z.string(),
-    amount: z.number(),
-    currency: z.string().default("NGN"),
-    paid_at: z.string().optional(),
-    customer: z
-      .object({
-        email: z.string().optional(),
-      })
-      .optional(),
-    metadata: z.record(z.string(), z.unknown()).optional(),
-  }),
+  data: paymentDataSchema,
 });
 
 export async function POST(request: Request) {
@@ -60,16 +50,15 @@ export async function POST(request: Request) {
 
   // charge.success: record the payment (idempotent)
   const data = event.data;
-  const amountInNaira = Math.round(data.amount) / 100;
 
   try {
     const recordResult = await recordPaystackPayment({
       reference: data.reference,
-      amount: amountInNaira,
+      amount: data.amount,
       currency: data.currency,
-      paid_at: data.paid_at,
-      customer: data.customer,
-      metadata: data.metadata,
+      paid_at: data.paid_at ?? undefined,
+      customer: data.customer ?? undefined,
+      metadata: data.metadata ?? undefined,
     });
 
     if (recordResult.status === "mismatch" || recordResult.status === "ignored") {

@@ -1,7 +1,7 @@
 import { z } from "zod/v4";
 
 export const loginSchema = z.object({
-  email: z.email({ error: "Please enter a valid email address" }),
+  email: z.string().trim().toLowerCase().pipe(z.email({ error: "Please enter a valid email address" })),
   password: z.string().min(1, { error: "Password is required" }),
 });
 
@@ -9,11 +9,15 @@ export const registerSchema = z
   .object({
     firstName: z
       .string()
+      .trim()
+      .max(100)
       .min(2, { error: "First name must be at least 2 characters" }),
     lastName: z
       .string()
+      .trim()
+      .max(100)
       .min(2, { error: "Last name must be at least 2 characters" }),
-    email: z.email({ error: "Please enter a valid email address" }),
+    email: z.string().trim().toLowerCase().pipe(z.email({ error: "Please enter a valid email address" })),
     phone: z.string().optional(),
     password: z
       .string()
@@ -35,7 +39,7 @@ export const registerSchema = z
   });
 
 export const forgotPasswordSchema = z.object({
-  email: z.email({ error: "Please enter a valid email address" }),
+  email: z.string().trim().toLowerCase().pipe(z.email({ error: "Please enter a valid email address" })),
 });
 
 export const resetPasswordSchema = z

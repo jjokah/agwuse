@@ -1,9 +1,10 @@
+import { normalizeSearchParams } from "@/lib/search-params";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
-import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { parsePageParams, resolvePage, pageMeta } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
 import { Input } from "@/components/ui/input";
 import {
@@ -28,9 +29,9 @@ export default async function AdminSermonsPage({
   searchParams?: Promise<{ q?: string; page?: string; pageSize?: string }>;
 }) {
   await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
-  const params = searchParams ? await searchParams : {};
+  const params = normalizeSearchParams(searchParams ? await searchParams : {});
   const { q } = params;
-  const { page, pageSize, skip, take } = parsePageParams(params);
+
 
   const where: Prisma.SermonWhereInput = {};
   if (q) {
@@ -41,15 +42,17 @@ export default async function AdminSermonsPage({
     ];
   }
 
-  const [sermons, total] = await Promise.all([
-    prisma.sermon.findMany({
+  const { sermons, total, page, pageSize } = await prisma.$transaction(async (tx) => {
+    const total = await tx.sermon.count({ where });
+    const { page, pageSize, skip, take } = resolvePage(parsePageParams(params), total);
+    const sermons = await tx.sermon.findMany({
       where,
-      orderBy: { date: "desc" },
+      orderBy: [{ date: "desc" }, { id: "desc" }],
       skip,
       take,
-    }),
-    prisma.sermon.count({ where }),
-  ]);
+    });
+    return { sermons, total, page, pageSize };
+  }, { isolationLevel: "RepeatableRead" });
 
   const meta = pageMeta({ totalItems: total, page, pageSize });
 

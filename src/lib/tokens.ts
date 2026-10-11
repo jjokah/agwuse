@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export type TokenType = "EMAIL_VERIFICATION" | "PASSWORD_RESET";
 
@@ -69,12 +70,13 @@ export async function createToken(options: CreateTokenOptions): Promise<string> 
 export async function consumeToken(
   rawToken: string,
   type: TokenType,
+  tx: Prisma.TransactionClient = prisma,
 ): Promise<{ email: string; type: string } | null> {
   if (!rawToken) return null;
 
   const tokenHash = hashToken(rawToken);
 
-  const rows = await prisma.$queryRaw<Array<{ email: string; type: string }>>`
+  const rows = await tx.$queryRaw<Array<{ email: string; type: string }>>`
     DELETE FROM "tokens"
     WHERE "tokenHash" = ${tokenHash}
       AND "type" = ${type}

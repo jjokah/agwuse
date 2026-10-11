@@ -1,9 +1,23 @@
 import { Prisma, type PrismaClient, type PledgeStatus } from "@prisma/client";
+import { toLagosDateString } from "@/lib/tz";
 
 type PrismaTx = PrismaClient | Prisma.TransactionClient;
 
 /** Statuses that still accept payments. OVERDUE is display-only today but treated as open. */
-const OPEN_PLEDGE_STATUSES: PledgeStatus[] = ["ACTIVE", "OVERDUE"];
+export const OPEN_PLEDGE_STATUSES: PledgeStatus[] = ["ACTIVE", "OVERDUE"];
+
+export function pledgeDisplayStatus(pledge: { status: PledgeStatus; endDate: Date | null }, now = new Date()): PledgeStatus {
+  if (!OPEN_PLEDGE_STATUSES.includes(pledge.status)) return pledge.status;
+  return pledge.endDate && pledge.endDate.toISOString().slice(0, 10) < toLagosDateString(now) ? "OVERDUE" : "ACTIVE";
+}
+
+export function pledgeStatusWhere(status?: string, now = new Date()): Prisma.PledgeWhereInput {
+  const today = new Date(`${toLagosDateString(now)}T00:00:00.000Z`);
+  if (status === "OVERDUE") return { status: { in: OPEN_PLEDGE_STATUSES }, endDate: { lt: today } };
+  if (status === "ACTIVE") return { status: { in: OPEN_PLEDGE_STATUSES }, OR: [{ endDate: null }, { endDate: { gte: today } }] };
+  if (status === "FULFILLED" || status === "CANCELLED") return { status };
+  return {};
+}
 
 export interface ApplyPledgePaymentResult {
   pledgeId: string;

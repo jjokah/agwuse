@@ -7,9 +7,10 @@ import { revokeSessions } from "@/lib/authz/revoke";
 import { writeAuditLog } from "@/lib/audit";
 import { isOwnedAvatarUrl } from "@/lib/uploads/policy";
 import { updateProfileSchema, changePasswordSchema } from "@/lib/validations/user";
-import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
+import { checkDualRateLimit, getClientIp } from "@/lib/ratelimit";
 import { after } from "next/server";
 import { deleteOwnedBlobs } from "@/lib/uploads/cleanup";
+import { revalidatePath } from "next/cache";
 
 export async function updateProfile(formData: FormData) {
   let session;
@@ -27,6 +28,8 @@ export async function updateProfile(formData: FormData) {
     address: formData.get("address") as string,
     occupation: formData.get("occupation") as string,
     dateOfBirth: formData.get("dateOfBirth") as string,
+    directoryShowEmail: formData.get("directoryShowEmail") === "on",
+    directoryShowPhone: formData.get("directoryShowPhone") === "on",
     gender: (formData.get("gender") as string) || undefined,
     maritalStatus: (formData.get("maritalStatus") as string) || undefined,
   };
@@ -58,11 +61,7 @@ export async function updateProfile(formData: FormData) {
       }
       nextImage = submittedImage || null;
 
-      if (oldImage && isOwnedAvatarUrl(oldImage, userId)) {
-        after(async () => {
-          await deleteOwnedBlobs([oldImage]);
-        });
-      }
+
     }
 
     await prisma.user.update({
@@ -79,9 +78,16 @@ export async function updateProfile(formData: FormData) {
         maritalStatus: (maritalStatus as "SINGLE" | "MARRIED" | "WIDOWED" | "DIVORCED") || null,
         image: nextImage,
         profilePhoto: nextImage,
+        directoryShowEmail: parsed.data.directoryShowEmail,
+        directoryShowPhone: parsed.data.directoryShowPhone,
       },
     });
 
+    if (oldImage && oldImage !== nextImage && isOwnedAvatarUrl(oldImage, userId)) {
+      after(() => deleteOwnedBlobs([oldImage]).then(() => {}));
+    }
+    revalidatePath("/profile");
+    revalidatePath("/directory");
     return { success: true };
   } catch (err) {
     console.error("updateProfile error:", err);
@@ -99,7 +105,7 @@ export async function changePassword(formData: FormData) {
 
   // Throttle per account as well as per IP (guessing the current password)
   const ip = await getClientIp();
-  const limitCheck = await checkRateLimit("user_change_password", `${session.user.id}:${ip}`, 5, "15 m", 15 * 60_000);
+  const limitCheck = await checkDualRateLimit("password_change", ip, session.user.id);
   if (!limitCheck.success) {
     return { success: false, error: limitCheck.error };
   }

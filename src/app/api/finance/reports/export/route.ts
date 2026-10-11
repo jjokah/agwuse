@@ -1,3 +1,4 @@
+import { scalarParam } from "@/lib/search-params";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { parseDateRange } from "@/lib/date-params";
@@ -34,11 +35,11 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = req.nextUrl;
-  const format = searchParams.get("format") === "pdf" ? "pdf" : "csv";
+  const format = scalarParam(searchParams, "format") === "pdf" ? "pdf" : "csv";
 
   const { from, to } = parseDateRange({
-    from: searchParams.get("from"),
-    to: searchParams.get("to"),
+    from: scalarParam(searchParams, "from"),
+    to: scalarParam(searchParams, "to"),
   });
   const data = await getFinanceReportData(from, to, format === "csv" ? CSV_MAX_ROWS : PDF_MAX_ROWS);
 
@@ -63,13 +64,14 @@ export async function GET(req: NextRequest) {
   const truncated = data.transactions.length < data.transactionCount;
 
   if (format === "csv") {
+    if (truncated) return NextResponse.json({ error: "Export exceeds 50,000 rows. Please narrow the date range." }, { status: 413 });
     const csvContent = toCsv(rows, CSV_COLUMNS);
     return new NextResponse(csvContent, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="finance-report-${fromStr}-to-${toStr}.csv"`,
-        ...(truncated ? { "X-Report-Truncated": String(data.transactions.length) } : {}),
+        "Cache-Control": "private, no-store",
       },
     });
   }
@@ -94,7 +96,7 @@ export async function GET(req: NextRequest) {
     incomeByType,
     expenseByCategory,
     note: truncated
-      ? `Transaction list shows the first ${data.transactions.length.toLocaleString()} of ${data.transactionCount.toLocaleString()} transactions; totals include all. Export CSV for the complete list.`
+      ? `Transaction list shows the first ${data.transactions.length.toLocaleString()} of ${data.transactionCount.toLocaleString()} transactions; totals include all. Narrow the date range and export CSV for the complete list.`
       : undefined,
   };
 

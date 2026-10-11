@@ -31,23 +31,24 @@ export async function approveUser(userId: string) {
     );
     if (!check.allowed) return { success: false, error: check.reason };
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        status: "ACTIVE",
-        memberSince: user.memberSince || new Date(),
-      },
-    });
-
-    await writeAuditLog({
-      action: "APPROVE_USER",
-      entity: "User",
-      entityId: userId,
-      userId: session.user.id,
-      details: {
-        email: user.email,
-        previousStatus: user.status,
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          status: "ACTIVE",
+          memberSince: user.memberSince || new Date(),
+        },
+      });
+      await writeAuditLog({
+        action: "APPROVE_USER",
+        entity: "User",
+        entityId: userId,
+        userId: session.user.id,
+        details: {
+          email: user.email,
+          previousStatus: user.status,
+        },
+      }, tx);
     });
 
     // Send account approved email asynchronously
@@ -98,17 +99,16 @@ export async function reactivateUser(userId: string) {
         data: { status: "ACTIVE" },
       });
       await revokeSessions(tx, userId);
-    });
-
-    await writeAuditLog({
-      action: "REACTIVATE_USER",
-      entity: "User",
-      entityId: userId,
-      userId: session.user.id,
-      details: {
-        email: user.email,
-        previousStatus: user.status,
-      },
+      await writeAuditLog({
+        action: "REACTIVATE_USER",
+        entity: "User",
+        entityId: userId,
+        userId: session.user.id,
+        details: {
+          email: user.email,
+          previousStatus: user.status,
+        },
+      }, tx);
     });
 
     const triggerReactivatedEmail = async () => {

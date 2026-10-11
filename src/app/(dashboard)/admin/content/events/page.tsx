@@ -1,10 +1,12 @@
+import { EventType } from "@prisma/client";
+import { normalizeSearchParams } from "@/lib/search-params";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { parsePageParams, resolvePage, pageMeta } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
 import { FilterSelect, FilterSubmit } from "@/components/shared/filter-select";
 import {
@@ -17,7 +19,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PlusCircle, Calendar } from "lucide-react";
-import type { EventType, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
   title: "Events Management",
@@ -38,23 +40,25 @@ export default async function AdminEventsPage({
   searchParams?: Promise<{ type?: string; page?: string; pageSize?: string }>;
 }) {
   await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
-  const params = searchParams ? await searchParams : {};
+  const params = normalizeSearchParams(searchParams ? await searchParams : {});
   const { type } = params;
-  const { page, pageSize, skip, take } = parsePageParams(params);
+
 
   const where: Prisma.EventWhereInput = {};
-  if (type) where.type = type as EventType;
+  if (type && Object.values(EventType).includes(type as EventType)) where.type = type as EventType;
 
-  const [events, total] = await Promise.all([
-    prisma.event.findMany({
+  const { events, total, page, pageSize } = await prisma.$transaction(async (tx) => {
+    const total = await tx.event.count({ where });
+    const { page, pageSize, skip, take } = resolvePage(parsePageParams(params), total);
+    const events = await tx.event.findMany({
       where,
       include: { createdBy: { select: { firstName: true, lastName: true } } },
-      orderBy: { startDate: "desc" },
+      orderBy: [{ startDate: "desc" }, { id: "desc" }],
       skip,
       take,
-    }),
-    prisma.event.count({ where }),
-  ]);
+    });
+    return { events, total, page, pageSize };
+  }, { isolationLevel: "RepeatableRead" });
 
   const meta = pageMeta({ totalItems: total, page, pageSize });
 

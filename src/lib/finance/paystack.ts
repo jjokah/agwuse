@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { recordTransaction, scheduleReceiptEmail } from "@/lib/finance/record-transaction";
 import { isUniqueViolation } from "@/lib/prisma-errors";
+import { Prisma } from "@prisma/client";
+import { paymentDataSchema, toKobo } from "@/lib/finance/payment-data";
 
 export interface PaystackPaymentData {
   reference: string;
-  amount: number; // amount in Naira
+  amount: number; // positive integer kobo, as returned by Paystack
   currency: string;
   paid_at?: string;
   customer?: { email?: string };
@@ -33,56 +35,59 @@ export type RecordPaystackResult =
 export async function recordPaystackPayment(
   data: PaystackPaymentData,
 ): Promise<RecordPaystackResult> {
-  const intentRef = (data.metadata?.intentRef as string) || data.reference;
-
-  // Independent lookups in parallel
-  const [systemUser, existing, intent] = await Promise.all([
-    // Deterministic system user (oldest active SUPER_ADMIN) for ledger recordedById & audit
-    prisma.user.findFirst({
-      where: { role: "SUPER_ADMIN", status: "ACTIVE" },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    }),
-    prisma.financialTransaction.findUnique({
-      where: { paystackRef: data.reference },
-      select: { receiptNumber: true },
-    }),
-    prisma.paymentIntent.findUnique({
-      where: { reference: intentRef },
-    }),
-  ]);
-
-  // Idempotency: already recorded
-  if (existing) {
-    return { status: "already_processed", receiptNumber: existing.receiptNumber };
+  if (!paymentDataSchema.safeParse(data).success) return { status: "mismatch", message: "Invalid verified payment data" };
+  if (data.metadata?.intentRef !== undefined && data.metadata.intentRef !== data.reference) {
+    return { status: "mismatch", message: "Conflicting payment references" };
   }
-
-  if (!systemUser) {
-    throw new Error("No active SUPER_ADMIN found to attribute Paystack recording");
-  }
-
-  // 1. Currency check
-  if (data.currency !== "NGN") {
-    await prisma.auditLog.create({
-      data: {
-        action: "PAYSTACK_NON_NGN_CURRENCY",
-        entity: "PaymentIntent",
-        entityId: data.reference,
-        userId: systemUser.id,
-        details: JSON.stringify({ currency: data.currency, reference: data.reference }),
-      },
-    });
-    return { status: "ignored", message: `Unsupported currency: ${data.currency}` };
-  }
+  const intentRef = data.reference;
 
   try {
+    // Independent lookups in parallel
+    const [systemUser, existing, intent] = await Promise.all([
+      // Deterministic system user (oldest active SUPER_ADMIN) for ledger recordedById & audit
+      prisma.user.findFirst({
+        where: { role: "SUPER_ADMIN", status: "ACTIVE" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      }),
+      prisma.financialTransaction.findUnique({
+        where: { paystackRef: data.reference },
+        select: { receiptNumber: true },
+      }),
+      prisma.paymentIntent.findUnique({
+        where: { reference: intentRef },
+      }),
+    ]);
+
+    // Idempotency: already recorded
+    if (existing) {
+      return { status: "already_processed", receiptNumber: existing.receiptNumber };
+    }
+
+    if (!systemUser) {
+      throw new Error("No active SUPER_ADMIN found to attribute Paystack recording");
+    }
+
+    // 1. Currency check
+    if (data.currency !== "NGN") {
+      await prisma.auditLog.create({
+        data: {
+          action: "PAYSTACK_NON_NGN_CURRENCY",
+          entity: "PaymentIntent",
+          entityId: data.reference,
+          userId: systemUser.id,
+          details: JSON.stringify({ currency: data.currency, reference: data.reference }),
+        },
+      });
+      return { status: "ignored", message: `Unsupported currency: ${data.currency}` };
+    }
+
     if (intent) {
       // Check amount and currency match
-      const intentAmount = Number(intent.amount);
-      if (Math.abs(intentAmount - data.amount) > 0.01 || intent.currency !== data.currency) {
+      if (toKobo(intent.amount) !== data.amount || intent.currency !== data.currency) {
         await prisma.$transaction(async (tx) => {
-          await tx.paymentIntent.update({
-            where: { reference: intent.reference },
+          await tx.paymentIntent.updateMany({
+            where: { reference: intent.reference, status: { not: "SUCCEEDED" } },
             data: { status: "FAILED" },
           });
           await tx.auditLog.create({
@@ -144,7 +149,7 @@ export async function recordPaystackPayment(
       return recordTransaction(tx, {
         type: "DONATION",
         category: "GENERAL",
-        amount: data.amount,
+        amount: new Prisma.Decimal(data.amount).div(100),
         currency: "NGN",
         paymentMethod: "ONLINE",
         paystackRef: data.reference,
@@ -165,8 +170,9 @@ export async function recordPaystackPayment(
         where: { paystackRef: data.reference },
         select: { receiptNumber: true },
       });
-      return { status: "already_processed", receiptNumber: winner?.receiptNumber ?? null };
+      if (winner) return { status: "already_processed", receiptNumber: winner.receiptNumber };
     }
+    console.error(JSON.stringify({ event: "payment_recording_failed", reference: data.reference, reason: err instanceof Error ? err.message : "Unknown failure" }));
     throw err;
   }
 }

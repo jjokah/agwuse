@@ -1,6 +1,7 @@
 import { z } from "zod/v4";
 import { optionalImageUrlSchema, mediaUrlSchema } from "@/lib/validations/media";
 import { parseLagosDateTime } from "@/lib/tz";
+import { isCalendarDay } from "@/lib/calendar";
 
 const optionalMediaUrlSchema = z
   .union([mediaUrlSchema, z.literal(""), z.null(), z.undefined()])
@@ -63,7 +64,7 @@ export const sermonSchema = z.object({
   title: z.string().min(2, { error: "Title is required" }).max(255),
   speaker: z.string().min(2, { error: "Speaker is required" }).max(150),
   description: z.string().optional(),
-  date: z.string().min(1, { error: "Date is required" }),
+  date: z.string().refine(isCalendarDay, { error: "Invalid calendar date" }),
   audioUrl: optionalMediaUrlSchema,
   videoUrl: optionalMediaUrlSchema,
   seriesName: z.string().max(150).optional(),

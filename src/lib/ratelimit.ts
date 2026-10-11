@@ -102,7 +102,7 @@ export async function getClientIp(): Promise<string> {
   }
 }
 
-export type RateLimitAction = "login" | "reset_request" | "verify_resend";
+export type RateLimitAction = "login" | "reset_request" | "verify_resend" | "register" | "password_change";
 
 export interface DualRateLimitConfig {
   ipLimit: number;
@@ -114,6 +114,8 @@ export interface DualRateLimitConfig {
 }
 
 export const RATE_LIMIT_CONFIGS: Record<RateLimitAction, DualRateLimitConfig> = {
+  register: { ipLimit: 5, ipWindow: "60 s", ipWindowMs: 60_000, emailLimit: 3, emailWindow: "1 h", emailWindowMs: 3_600_000 },
+  password_change: { ipLimit: 10, ipWindow: "15 m", ipWindowMs: 900_000, emailLimit: 5, emailWindow: "15 m", emailWindowMs: 900_000 },
   login: {
     ipLimit: 10,
     ipWindow: "60 s",

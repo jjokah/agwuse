@@ -9,6 +9,7 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
+  await requirePageRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
   const { id } = await params;
   const pledge = await prisma.pledge.findUnique({
     where: { id },

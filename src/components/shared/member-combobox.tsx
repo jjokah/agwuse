@@ -24,6 +24,8 @@ import {
 
 export interface MemberComboboxProps {
   name?: string;
+  id?: string;
+  value?: MemberSearchResult | null;
   defaultValue?: string;
   defaultMemberName?: string;
   placeholder?: string;
@@ -34,6 +36,8 @@ export interface MemberComboboxProps {
 
 export function MemberCombobox({
   name = "memberId",
+  id,
+  value,
   defaultValue = "",
   defaultMemberName = "",
   placeholder = "Select or search member...",
@@ -44,45 +48,40 @@ export function MemberCombobox({
   const [query, setQuery] = React.useState("");
   const [results, setResults] = React.useState<MemberSearchResult[]>([]);
   const [loading, setLoading] = React.useState(false);
-  const [selected, setSelected] = React.useState<{ id: string; name: string } | null>(
+  const [internalSelected, setSelected] = React.useState<{ id: string; name: string } | null>(
     defaultValue
       ? { id: defaultValue, name: defaultMemberName || defaultValue }
       : null,
   );
 
+  const selected = value === undefined ? internalSelected : value;
+
   // Debounced member search
   React.useEffect(() => {
     if (query.trim().length < 2) {
-      setResults([]);
-      setLoading(false);
       return;
     }
 
-    setLoading(true);
+    let active = true;
     const timer = setTimeout(async () => {
       try {
         const found = await searchMembers(query);
-        setResults(found);
+        if (active) setResults(found);
       } catch (err) {
         console.error("Member search error:", err);
-        setResults([]);
+        if (active) setResults([]);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }, 250);
 
-    return () => clearTimeout(timer);
+    return () => { active = false; clearTimeout(timer); };
   }, [query]);
 
   const handleSelect = (member: MemberSearchResult | null) => {
     setSelected(member ? { id: member.id, name: member.name } : null);
     setOpen(false);
     onSelect?.(member);
-  };
-
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    handleSelect(null);
   };
 
   return (
@@ -94,6 +93,8 @@ export function MemberCombobox({
         <PopoverTrigger
           render={
             <Button
+              id={id ?? name}
+              type="button"
               variant="outline"
               role="combobox"
               aria-expanded={open}
@@ -111,23 +112,6 @@ export function MemberCombobox({
           </span>
 
           <div className="flex items-center gap-1 shrink-0 ml-1">
-            {selected && (
-              <span
-                role="button"
-                tabIndex={0}
-                aria-label="Clear selected member"
-                onClick={handleClear}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    handleSelect(null);
-                  }
-                }}
-                className="rounded-xs p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-              >
-                <X className="size-3.5" />
-              </span>
-            )}
             <ChevronsUpDown className="size-3.5 text-muted-foreground opacity-50" />
           </div>
         </PopoverTrigger>
@@ -135,13 +119,18 @@ export function MemberCombobox({
         <PopoverContent className="w-80 p-0" align="start">
           <Command shouldFilter={false}>
             <CommandInput
+              aria-label="Search members"
               placeholder="Type name, email or phone..."
               value={query}
-              onValueChange={setQuery}
+              onValueChange={(value) => {
+                setQuery(value);
+                setResults([]);
+                setLoading(value.trim().length >= 2);
+              }}
             />
             <CommandList>
               {loading && (
-                <div className="flex items-center justify-center p-4 text-sm text-muted-foreground gap-2">
+                <div role="status" className="flex items-center justify-center p-4 text-sm text-muted-foreground gap-2">
                   <Loader2 className="size-4 animate-spin" />
                   Searching...
                 </div>
@@ -187,6 +176,7 @@ export function MemberCombobox({
           </Command>
         </PopoverContent>
       </Popover>
+      {selected && <button type="button" aria-label="Clear selected member" onClick={() => handleSelect(null)} className="mt-1 flex items-center gap-1 text-xs text-muted-foreground"><X className="size-3" /> Clear member</button>}
     </div>
   );
 }

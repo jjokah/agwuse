@@ -1,3 +1,4 @@
+import { normalizeSearchParams } from "@/lib/search-params";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/auth";
@@ -5,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { parsePageParams, resolvePage, pageMeta } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
 import { FilterSelect, FilterSubmit } from "@/components/shared/filter-select";
 import {
@@ -56,25 +57,27 @@ export default async function TransactionsPage({
   }>;
 }) {
   await requirePageRole(["FINANCE", "ADMIN", "SUPER_ADMIN"]);
-  const params = await searchParams;
+  const params = normalizeSearchParams(await searchParams);
   const { type, method, from, to, q } = params;
-  const { page, pageSize, skip, take } = parsePageParams(params);
+
 
   const where = buildTransactionWhere({ type, method, from, to, q });
 
-  const [transactions, total] = await Promise.all([
-    prisma.financialTransaction.findMany({
+  const { transactions, total, page, pageSize } = await prisma.$transaction(async (tx) => {
+    const total = await tx.financialTransaction.count({ where });
+    const { page, pageSize, skip, take } = resolvePage(parsePageParams(params), total);
+    const transactions = await tx.financialTransaction.findMany({
       where,
       include: {
         member: { select: { firstName: true, lastName: true } },
         recordedBy: { select: { firstName: true, lastName: true } },
       },
-      orderBy: { date: "desc" },
+      orderBy: [{ date: "desc" }, { id: "desc" }],
       skip,
       take,
-    }),
-    prisma.financialTransaction.count({ where }),
-  ]);
+    });
+    return { transactions, total, page, pageSize };
+  }, { isolationLevel: "RepeatableRead" });
 
   const meta = pageMeta({ totalItems: total, page, pageSize });
 

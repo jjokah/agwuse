@@ -1,5 +1,6 @@
 "use server";
 
+import { auditedMutation } from "@/lib/audited-mutation";
 import { prisma } from "@/lib/prisma";
 import { requireRole } from "@/lib/auth";
 import {
@@ -57,7 +58,7 @@ export async function createBlogPost(formData: FormData) {
       slug = `${slug}-${Date.now().toString(36)}`;
     }
 
-    await prisma.blogPost.create({
+    await auditedMutation(session.user.id, "CREATE_BLOG_POST", "BlogPost", (tx) => tx.blogPost.create({
       data: {
         title: data.title.trim(),
         slug,
@@ -69,7 +70,7 @@ export async function createBlogPost(formData: FormData) {
         publishedAt: isPublished ? new Date() : null,
         authorId: session.user.id,
       },
-    });
+    }));
 
     revalidateBlogPost(slug);
     return { success: true };
@@ -80,7 +81,7 @@ export async function createBlogPost(formData: FormData) {
 }
 
 export async function updateBlogPost(id: string, formData: FormData) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   const raw = {
     title: formData.get("title") as string,
@@ -106,14 +107,8 @@ export async function updateBlogPost(id: string, formData: FormData) {
     }
 
     const newImage = data.featuredImage || null;
-    if (existing.featuredImage && existing.featuredImage !== newImage) {
-      const oldImage = existing.featuredImage;
-      after(async () => {
-        await deleteOwnedBlobs([oldImage]);
-      });
-    }
 
-    await prisma.blogPost.update({
+    await auditedMutation(session.user.id, "UPDATE_BLOG_POST", "BlogPost", (tx) => tx.blogPost.update({
       where: { id },
       data: {
         title: data.title.trim(),
@@ -124,7 +119,14 @@ export async function updateBlogPost(id: string, formData: FormData) {
         published: isPublished,
         publishedAt: isPublished && !existing.publishedAt ? new Date() : existing.publishedAt,
       },
-    });
+    }));
+
+    if (existing.featuredImage && existing.featuredImage !== newImage) {
+      const oldImage = existing.featuredImage;
+      after(async () => {
+        await deleteOwnedBlobs([oldImage]);
+      });
+    }
 
     revalidateBlogPost(existing.slug);
     return { success: true };
@@ -137,14 +139,8 @@ export async function updateBlogPost(id: string, formData: FormData) {
 export async function deleteBlogPost(id: string) {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    const deleted = await prisma.blogPost.delete({ where: { id } });
-    await writeAuditLog({
-      action: "DELETE_BLOG_POST",
-      entity: "BlogPost",
-      entityId: id,
-      userId: session.user.id,
-      details: { title: deleted.title, slug: deleted.slug },
-    });
+    const deleted = await auditedMutation(session.user.id, "DELETE_BLOG_POST", "BlogPost", (tx) => tx.blogPost.delete({ where: { id } }));
+
     if (deleted.featuredImage) {
       after(async () => {
         await deleteOwnedBlobs([deleted.featuredImage]);
@@ -184,7 +180,7 @@ export async function createEvent(formData: FormData) {
   const data = parsed.data;
 
   try {
-    const created = await prisma.event.create({
+    const created = await auditedMutation(session.user.id, "CREATE_EVENT", "Event", (tx) => tx.event.create({
       data: {
         title: data.title.trim(),
         description: data.description?.trim() || null,
@@ -196,7 +192,7 @@ export async function createEvent(formData: FormData) {
         isPublished: data.isPublished === "on",
         createdById: session.user.id,
       },
-    });
+    }));
 
     revalidateEvent(created.id);
     return { success: true };
@@ -207,7 +203,7 @@ export async function createEvent(formData: FormData) {
 }
 
 export async function updateEvent(id: string, formData: FormData) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   const raw = {
     title: formData.get("title") as string,
@@ -234,14 +230,8 @@ export async function updateEvent(id: string, formData: FormData) {
     }
 
     const newImage = data.imageUrl || null;
-    if (existing.imageUrl && existing.imageUrl !== newImage) {
-      const oldImage = existing.imageUrl;
-      after(async () => {
-        await deleteOwnedBlobs([oldImage]);
-      });
-    }
 
-    await prisma.event.update({
+    await auditedMutation(session.user.id, "UPDATE_EVENT", "Event", (tx) => tx.event.update({
       where: { id },
       data: {
         title: data.title.trim(),
@@ -253,7 +243,14 @@ export async function updateEvent(id: string, formData: FormData) {
         imageUrl: newImage,
         isPublished: data.isPublished === "on",
       },
-    });
+    }));
+
+    if (existing.imageUrl && existing.imageUrl !== newImage) {
+      const oldImage = existing.imageUrl;
+      after(async () => {
+        await deleteOwnedBlobs([oldImage]);
+      });
+    }
 
     revalidateEvent(id);
     return { success: true };
@@ -266,14 +263,8 @@ export async function updateEvent(id: string, formData: FormData) {
 export async function deleteEvent(id: string) {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    const deleted = await prisma.event.delete({ where: { id } });
-    await writeAuditLog({
-      action: "DELETE_EVENT",
-      entity: "Event",
-      entityId: id,
-      userId: session.user.id,
-      details: { title: deleted.title },
-    });
+    const deleted = await auditedMutation(session.user.id, "DELETE_EVENT", "Event", (tx) => tx.event.delete({ where: { id } }));
+
     if (deleted.imageUrl) {
       after(async () => {
         await deleteOwnedBlobs([deleted.imageUrl]);
@@ -292,7 +283,7 @@ export async function deleteEvent(id: string) {
 // ============================================================
 
 export async function createGalleryImage(formData: FormData) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   const parsed = galleryImageSchema.safeParse({
     imageUrl: (formData.get("url") as string) ?? "",
@@ -305,13 +296,13 @@ export async function createGalleryImage(formData: FormData) {
   const { imageUrl, caption, albumName } = parsed.data;
 
   try {
-    await prisma.galleryImage.create({
+    await auditedMutation(session.user.id, "CREATE_GALLERY_IMAGE", "GalleryImage", (tx) => tx.galleryImage.create({
       data: {
         url: imageUrl,
         caption: caption ? caption.trim() : null,
         albumName: albumName ? albumName.trim() : null,
       },
-    });
+    }));
 
     revalidateGallery();
     return { success: true };
@@ -324,14 +315,8 @@ export async function createGalleryImage(formData: FormData) {
 export async function deleteGalleryImage(id: string) {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    const deleted = await prisma.galleryImage.delete({ where: { id } });
-    await writeAuditLog({
-      action: "DELETE_GALLERY_IMAGE",
-      entity: "GalleryImage",
-      entityId: id,
-      userId: session.user.id,
-      details: { url: deleted.url, caption: deleted.caption },
-    });
+    const deleted = await auditedMutation(session.user.id, "DELETE_GALLERY_IMAGE", "GalleryImage", (tx) => tx.galleryImage.delete({ where: { id } }));
+
     if (deleted.url) {
       after(async () => {
         await deleteOwnedBlobs([deleted.url, deleted.thumbnailUrl]);
@@ -350,7 +335,7 @@ export async function deleteGalleryImage(id: string) {
 // ============================================================
 
 export async function createSermon(formData: FormData) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   const raw = {
     title: formData.get("title") as string,
@@ -370,7 +355,7 @@ export async function createSermon(formData: FormData) {
   const data = parsed.data;
 
   try {
-    await prisma.sermon.create({
+    await auditedMutation(session.user.id, "CREATE_SERMON", "Sermon", (tx) => tx.sermon.create({
       data: {
         title: data.title.trim(),
         speaker: data.speaker.trim(),
@@ -380,7 +365,7 @@ export async function createSermon(formData: FormData) {
         videoUrl: data.videoUrl || null,
         seriesName: data.seriesName ? data.seriesName.trim() : null,
       },
-    });
+    }));
 
     revalidateSermon();
     return { success: true };
@@ -391,7 +376,7 @@ export async function createSermon(formData: FormData) {
 }
 
 export async function updateSermon(id: string, formData: FormData) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   const raw = {
     title: formData.get("title") as string,
@@ -417,14 +402,9 @@ export async function updateSermon(id: string, formData: FormData) {
     }
 
     const newAudio = data.audioUrl || null;
-    if (existing.audioUrl && existing.audioUrl !== newAudio) {
-      const oldAudio = existing.audioUrl;
-      after(async () => {
-        await deleteOwnedBlobs([oldAudio]);
-      });
-    }
+    const newVideo = data.videoUrl || null;
 
-    await prisma.sermon.update({
+    await auditedMutation(session.user.id, "UPDATE_SERMON", "Sermon", (tx) => tx.sermon.update({
       where: { id },
       data: {
         title: data.title.trim(),
@@ -432,10 +412,20 @@ export async function updateSermon(id: string, formData: FormData) {
         description: data.description?.trim() || null,
         date: new Date(data.date),
         audioUrl: newAudio,
-        videoUrl: data.videoUrl || null,
+        videoUrl: newVideo,
         seriesName: data.seriesName ? data.seriesName.trim() : null,
       },
-    });
+    }));
+
+    const replacedMedia = [
+      existing.audioUrl !== newAudio ? existing.audioUrl : null,
+      existing.videoUrl !== newVideo ? existing.videoUrl : null,
+    ].filter((url): url is string => !!url);
+    if (replacedMedia.length > 0) {
+      after(async () => {
+        await deleteOwnedBlobs(replacedMedia);
+      });
+    }
 
     revalidateSermon();
     return { success: true };
@@ -448,17 +438,11 @@ export async function updateSermon(id: string, formData: FormData) {
 export async function deleteSermon(id: string) {
   const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    const deleted = await prisma.sermon.delete({ where: { id } });
-    await writeAuditLog({
-      action: "DELETE_SERMON",
-      entity: "Sermon",
-      entityId: id,
-      userId: session.user.id,
-      details: { title: deleted.title, speaker: deleted.speaker },
-    });
-    if (deleted.audioUrl) {
+    const deleted = await auditedMutation(session.user.id, "DELETE_SERMON", "Sermon", (tx) => tx.sermon.delete({ where: { id } }));
+
+    if (deleted.audioUrl || deleted.videoUrl || deleted.thumbnailUrl) {
       after(async () => {
-        await deleteOwnedBlobs([deleted.audioUrl]);
+        await deleteOwnedBlobs([deleted.audioUrl, deleted.videoUrl, deleted.thumbnailUrl]);
       });
     }
     revalidateSermon();
@@ -474,13 +458,13 @@ export async function deleteSermon(id: string) {
 // ============================================================
 
 export async function approveSubmission(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    await prisma.submission.update({
+    await auditedMutation(session.user.id, "APPROVE_SUBMISSION", "Submission", (tx) => tx.submission.update({
       where: { id },
       // Respect the submitter's choice: approval never makes a private submission public.
       data: { status: "APPROVED" },
-    });
+    }));
     revalidatePath("/admin/content/moderation");
     revalidatePath("/testimony");
     return { success: true };
@@ -491,12 +475,12 @@ export async function approveSubmission(id: string) {
 }
 
 export async function archiveSubmission(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
-    await prisma.submission.update({
+    await auditedMutation(session.user.id, "ARCHIVE_SUBMISSION", "Submission", (tx) => tx.submission.update({
       where: { id },
       data: { status: "ARCHIVED" },
-    });
+    }));
     revalidatePath("/admin/content/moderation");
     revalidatePath("/testimony");
     return { success: true };
@@ -511,7 +495,7 @@ export async function archiveSubmission(id: string) {
 // ============================================================
 
 export async function createDepartment(formData: FormData) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   const raw = {
     name: formData.get("name") as string,
@@ -528,14 +512,14 @@ export async function createDepartment(formData: FormData) {
   const data = parsed.data;
 
   try {
-    await prisma.department.create({
+    await auditedMutation(session.user.id, "CREATE_DEPARTMENT", "Department", (tx) => tx.department.create({
       data: {
         name: data.name.trim(),
         description: data.description?.trim() || null,
         category: data.category as "MINISTRY" | "COMMITTEE" | "CHOIR" | "OUTREACH",
         leaderId: data.leaderId || null,
       },
-    });
+    }));
 
     revalidatePath("/admin/settings/departments");
     revalidatePath("/departments");
@@ -548,7 +532,7 @@ export async function createDepartment(formData: FormData) {
 }
 
 export async function updateDepartment(id: string, formData: FormData) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   const raw = {
     name: formData.get("name") as string,
@@ -566,7 +550,7 @@ export async function updateDepartment(id: string, formData: FormData) {
   const data = parsed.data;
 
   try {
-    await prisma.department.update({
+    await auditedMutation(session.user.id, "UPDATE_DEPARTMENT", "Department", (tx) => tx.department.update({
       where: { id },
       data: {
         name: data.name.trim(),
@@ -575,7 +559,7 @@ export async function updateDepartment(id: string, formData: FormData) {
         leaderId: data.leaderId || null,
         isActive: data.isActive ?? true,
       },
-    });
+    }));
 
     revalidatePath("/admin/settings/departments");
     revalidatePath("/departments");
@@ -588,7 +572,7 @@ export async function updateDepartment(id: string, formData: FormData) {
 }
 
 export async function deleteDepartment(id: string) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
   try {
     await prisma.$transaction(async (tx) => {
       // Nullify departmentId for any members assigned to this department
@@ -597,6 +581,7 @@ export async function deleteDepartment(id: string) {
         data: { departmentId: null },
       });
       await tx.department.delete({ where: { id } });
+      await writeAuditLog({ action: "DELETE_DEPARTMENT", entity: "Department", entityId: id, userId: session.user.id }, tx);
     });
 
     revalidatePath("/admin/settings/departments");
@@ -614,7 +599,7 @@ export async function deleteDepartment(id: string) {
 // ============================================================
 
 export async function updateLiveStreamConfig(formData: FormData) {
-  await requireRole(["ADMIN", "SUPER_ADMIN"]);
+  const session = await requireRole(["ADMIN", "SUPER_ADMIN"]);
 
   const raw = Object.fromEntries(formData);
   const parsed = liveStreamSchema.safeParse(raw);
@@ -625,7 +610,7 @@ export async function updateLiveStreamConfig(formData: FormData) {
   const data = parsed.data;
 
   try {
-    await prisma.liveStreamConfig.upsert({
+    await auditedMutation(session.user.id, "UPDATE_LIVE_STREAM_CONFIG", "LiveStreamConfig", (tx) => tx.liveStreamConfig.upsert({
       where: { id: "default" },
       create: {
         id: "default",
@@ -642,7 +627,7 @@ export async function updateLiveStreamConfig(formData: FormData) {
         title: data.title ? data.title.trim() : null,
         description: data.description?.trim() || null,
       },
-    });
+    }));
 
     revalidatePath("/admin/content/livestream");
     revalidatePath("/live");

@@ -16,6 +16,7 @@ export async function generateMetadata({
 }: {
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
+  await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
   const { id } = await params;
   const user = await getUserById(id);
   return {

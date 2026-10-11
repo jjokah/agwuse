@@ -41,8 +41,9 @@ export function validateEnv(): Env {
 
   // Production-specific security checks
   if (result.data.NODE_ENV === "production" && !isBuildPhase && !isTest) {
-    if (!result.data.RESEND_API_KEY && result.data.EMAIL_TRANSPORT === "resend") {
-      console.warn("[WARN] EMAIL_TRANSPORT=resend but RESEND_API_KEY is not set.");
+    if (result.data.EMAIL_TRANSPORT === "log" || !result.data.RESEND_API_KEY?.startsWith("re_") ||
+      !result.data.EMAIL_FROM || !/@[^\s<>]+\.[^\s<>]+/.test(result.data.EMAIL_FROM)) {
+      throw new Error("Production requires Resend delivery, a valid RESEND_API_KEY, and EMAIL_FROM.");
     }
     if (!result.data.PAYSTACK_SECRET_KEY) {
       console.warn("[WARN] PAYSTACK_SECRET_KEY is not set in production.");

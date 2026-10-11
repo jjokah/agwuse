@@ -11,14 +11,14 @@ export function RegistrationAttemptEmail({
 }: RegistrationAttemptEmailProps) {
   return (
     <EmailLayout
-      preview="Registration attempt on your AG Wuse account"
-      heading="Registration Notice"
+      preview="Your AG Wuse account request"
+      heading="Account Access Guidance"
     >
       <Text style={textStyle}>
-        Someone recently tried to register a new account on AG Wuse using your email address.
+        We received an account access request using this email address.
       </Text>
       <Text style={textStyle}>
-        If this was you and you forgot your password, you can reset your password using the button below:
+        If you already have an account, sign in or request a password reset using the button below. If you have not registered yet, visit the registration page.
       </Text>
 
       <Section style={btnSectionStyle}>
@@ -28,7 +28,7 @@ export function RegistrationAttemptEmail({
       </Section>
 
       <Text style={subtextStyle}>
-        If you did not make this request, you can safely disregard this message. Your account remains secure and no changes were made.
+        If you did not make this request, you can safely disregard this message. No password or account changes were made.
       </Text>
     </EmailLayout>
   );

@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { OPEN_PLEDGE_STATUSES } from "@/lib/finance/pledges";
 import { OfferingCategory } from "@prisma/client";
 import { requireRole } from "@/lib/auth";
 import { transactionSchema, pledgeSchema } from "@/lib/validations/finance";
@@ -111,28 +112,31 @@ export async function createPledge(formData: FormData): Promise<ActionResult<{ i
   const data = parsed.data;
 
   try {
-    const pledge = await prisma.pledge.create({
-      data: {
-        title: data.title,
-        amount: data.amount,
-        amountPaid: 0,
-        startDate: data.startDate,
-        endDate: data.endDate || null,
-        status: "ACTIVE",
-        memberId: data.memberId,
-      },
-    });
+    const pledge = await prisma.$transaction(async (tx) => {
+      const pledge = await tx.pledge.create({
+        data: {
+          title: data.title,
+          amount: data.amount,
+          amountPaid: 0,
+          startDate: data.startDate,
+          endDate: data.endDate || null,
+          status: "ACTIVE",
+          memberId: data.memberId,
+        },
+      });
 
-    await writeAuditLog({
-      action: "CREATE_PLEDGE",
-      entity: "Pledge",
-      entityId: pledge.id,
-      userId: session.user.id,
-      details: {
-        title: data.title,
-        amount: data.amount.toString(),
-        memberId: data.memberId,
-      },
+      await writeAuditLog({
+        action: "CREATE_PLEDGE",
+        entity: "Pledge",
+        entityId: pledge.id,
+        userId: session.user.id,
+        details: {
+          title: data.title,
+          amount: data.amount.toString(),
+          memberId: data.memberId,
+        },
+      }, tx);
+      return pledge;
     });
 
     revalidatePath("/admin/finance/pledges");
@@ -159,28 +163,30 @@ export async function cancelPledge(pledgeId: string): Promise<ActionResult<void>
       return { success: false, error: "Pledge not found" };
     }
 
-    if (pledge.status !== "ACTIVE") {
+    if (!(OPEN_PLEDGE_STATUSES as readonly string[]).includes(pledge.status)) {
       return { success: false, error: `Cannot cancel a pledge that is ${pledge.status.toLowerCase()}` };
     }
 
     // Conditional update: a payment that fulfils the pledge concurrently wins
-    const cancelled = await prisma.pledge.updateMany({
-      where: { id: pledgeId, status: "ACTIVE" },
-      data: { status: "CANCELLED" },
-    });
-    if (cancelled.count === 0) {
-      return { success: false, error: "This pledge changed while you were cancelling it. Please refresh." };
-    }
+    await prisma.$transaction(async (tx) => {
+      const cancelled = await tx.pledge.updateMany({
+        where: { id: pledgeId, status: { in: [...OPEN_PLEDGE_STATUSES] } },
+        data: { status: "CANCELLED" },
+      });
+      if (cancelled.count === 0) {
+        throw new Error("This pledge changed while you were cancelling it. Please refresh.");
+      }
 
-    await writeAuditLog({
-      action: "CANCEL_PLEDGE",
-      entity: "Pledge",
-      entityId: pledgeId,
-      userId: session.user.id,
-      details: {
-        title: pledge.title,
-        memberId: pledge.memberId,
-      },
+      await writeAuditLog({
+        action: "CANCEL_PLEDGE",
+        entity: "Pledge",
+        entityId: pledgeId,
+        userId: session.user.id,
+        details: {
+          title: pledge.title,
+          memberId: pledge.memberId,
+        },
+      }, tx);
     });
 
     revalidatePath("/admin/finance/pledges");
@@ -204,7 +210,7 @@ export async function getMemberActivePledges(memberId: string) {
   const pledges = await prisma.pledge.findMany({
     where: {
       memberId,
-      status: "ACTIVE",
+      status: { in: [...OPEN_PLEDGE_STATUSES] },
     },
     select: {
       id: true,

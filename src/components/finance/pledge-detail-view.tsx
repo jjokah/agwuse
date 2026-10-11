@@ -1,3 +1,4 @@
+import { pledgeDisplayStatus } from "@/lib/finance/pledges";
 import Link from "next/link";
 import { ArrowLeft, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -32,10 +33,8 @@ export function PledgeDetailView({ pledge, backPath }: PledgeDetailViewProps) {
   const remaining = Math.max(0, total - paid);
   const progress = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
 
-  const now = new Date();
-  const isOverdue =
-    pledge.status === "ACTIVE" && pledge.endDate && new Date(pledge.endDate) < now;
-  const displayStatus = isOverdue ? "OVERDUE" : pledge.status;
+
+  const displayStatus = pledgeDisplayStatus({ status: pledge.status, endDate: pledge.endDate ? new Date(pledge.endDate) : null });
 
   const statusColor: Record<string, string> = {
     ACTIVE: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400",

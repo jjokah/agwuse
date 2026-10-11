@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { DownloadButton } from "@/components/shared/download-button";
 import { FileSpreadsheet, Download } from "lucide-react";
 
 export interface ExportButtonsProps {
@@ -13,36 +13,14 @@ export function ExportButtons({ from, to, className }: ExportButtonsProps) {
 
   return (
     <div className={`flex items-center gap-2 ${className || ""}`}>
-      <Button
-        variant="outline"
-        size="sm"
-        nativeButton={false}
-        render={
-          <a
-            href={csvUrl}
-            download={`agwuse-report-${from}-to-${to}.csv`}
-            className="inline-flex items-center"
-          >
+      <DownloadButton href={csvUrl}>
             <FileSpreadsheet className="mr-1.5 size-4" />
             Export CSV
-          </a>
-        }
-      />
-      <Button
-        variant="outline"
-        size="sm"
-        nativeButton={false}
-        render={
-          <a
-            href={pdfUrl}
-            download={`agwuse-report-${from}-to-${to}.pdf`}
-            className="inline-flex items-center"
-          >
+      </DownloadButton>
+      <DownloadButton href={pdfUrl}>
             <Download className="mr-1.5 size-4" />
             Export PDF
-          </a>
-        }
-      />
+      </DownloadButton>
     </div>
   );
 }

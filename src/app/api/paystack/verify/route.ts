@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod/v4";
 import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
+import { paymentDataSchema } from "@/lib/finance/payment-data";
 import { recordPaystackPayment } from "@/lib/finance/paystack";
 import { paystackReferenceSchema } from "@/lib/validations/finance";
 
@@ -72,17 +73,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const data = result.data;
-  const amountInNaira = Math.round(Number(data.amount)) / 100;
+  const verified = paymentDataSchema.safeParse(result.data);
+  if (!verified.success || verified.data.reference !== reference) {
+    return NextResponse.json({ error: "Payment processor returned invalid or conflicting payment details" }, { status: 502 });
+  }
+  const data = verified.data;
 
-  const recordResult = await recordPaystackPayment({
+  let recordResult;
+  try {
+    recordResult = await recordPaystackPayment({
     reference: data.reference,
-    amount: amountInNaira,
+    amount: data.amount,
     currency: data.currency || "NGN",
-    paid_at: data.paid_at,
-    customer: data.customer,
-    metadata: data.metadata,
-  });
+    paid_at: data.paid_at ?? undefined,
+    customer: data.customer ?? undefined,
+    metadata: data.metadata ?? undefined,
+    });
+  } catch {
+    return NextResponse.json({ error: "Payment recording is unavailable. Please retry verification or contact the church office." }, { status: 503 });
+  }
 
   if (recordResult.status === "mismatch") {
     return NextResponse.json(

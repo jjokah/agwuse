@@ -48,19 +48,20 @@ export function parsePageParams(
   let rawPageSize: string | undefined;
 
   if (sp instanceof URLSearchParams) {
-    rawPage = sp.get("page") ?? undefined;
-    rawPageSize = sp.get("pageSize") ?? sp.get("limit") ?? undefined;
+    rawPage = sp.getAll("page").length === 1 ? sp.get("page") ?? undefined : undefined;
+    const key = sp.has("pageSize") ? "pageSize" : "limit";
+    rawPageSize = sp.getAll(key).length === 1 ? sp.get(key) ?? undefined : undefined;
   } else if (sp && typeof sp === "object") {
     const p = sp.page;
-    rawPage = Array.isArray(p) ? p[0] : p;
+    rawPage = Array.isArray(p) ? undefined : p;
     const ps = sp.pageSize ?? sp.limit;
-    rawPageSize = Array.isArray(ps) ? ps[0] : ps;
+    rawPageSize = Array.isArray(ps) ? undefined : ps;
   }
 
-  const parsedPage = parseInt(rawPage || "", 10);
-  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const parsedPage = /^\d+$/.test(rawPage ?? "") ? Number(rawPage) : NaN;
+  const page = Number.isSafeInteger(parsedPage) && parsedPage > 0 && parsedPage <= 1_000_000 ? parsedPage : 1;
 
-  const parsedSize = parseInt(rawPageSize || "", 10);
+  const parsedSize = /^\d+$/.test(rawPageSize ?? "") ? Number(rawPageSize) : NaN;
   let pageSize = Number.isFinite(parsedSize) && parsedSize > 0 ? parsedSize : defaultSize;
   if (pageSize > maxSize) pageSize = maxSize;
 
@@ -84,9 +85,15 @@ export function pageMeta({ totalItems, page, pageSize }: PageMetaInput): PageMet
     totalPages,
     currentPage,
     pageSize: safeSize,
-    hasNextPage: page < totalPages,
-    hasPrevPage: page > 1,
+    hasNextPage: currentPage < totalPages,
+    hasPrevPage: currentPage > 1,
   };
+}
+
+/** Resolve a requested page from a count before fetching rows or calculating an offset. */
+export function resolvePage(params: ParsedPageParams, total: number): ParsedPageParams {
+  const page = pageMeta({ totalItems: total, page: params.page, pageSize: params.pageSize }).currentPage;
+  return { ...params, page, skip: (page - 1) * params.pageSize };
 }
 
 /**

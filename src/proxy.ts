@@ -9,7 +9,7 @@ import { resolveRouteAccess } from "@/lib/route-access";
  */
 export default auth((req) => {
   const { pathname, search } = req.nextUrl;
-  const isLoggedIn = !!req.auth;
+  const isLoggedIn = typeof req.auth?.user?.id === "string" && req.auth.user.id.length > 0;
   const userRole = req.auth?.user?.role ?? null;
 
   const decision = resolveRouteAccess(pathname, { isLoggedIn, role: userRole, search });

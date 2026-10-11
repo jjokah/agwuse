@@ -1,3 +1,5 @@
+import { UserStatus, UserRole } from "@prisma/client";
+import { normalizeSearchParams } from "@/lib/search-params";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePageRole } from "@/lib/auth";
@@ -6,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ROLE_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
-import { parsePageParams, pageMeta } from "@/lib/pagination";
+import { parsePageParams, resolvePage, pageMeta } from "@/lib/pagination";
 import { PaginationBar } from "@/components/shared/pagination-bar";
 import { FilterSelect, FilterSubmit } from "@/components/shared/filter-select";
 import {
@@ -19,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Users } from "lucide-react";
-import type { UserRole, UserStatus, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 export const metadata: Metadata = {
   title: "User Management",
@@ -45,9 +47,9 @@ export default async function AdminUsersPage({
   searchParams: Promise<{ q?: string; status?: string; role?: string; page?: string; pageSize?: string }>;
 }) {
   await requirePageRole(["ADMIN", "SUPER_ADMIN"]);
-  const params = await searchParams;
+  const params = normalizeSearchParams(await searchParams);
   const { q, status, role } = params;
-  const { page, pageSize, skip, take } = parsePageParams(params);
+
 
   const where: Prisma.UserWhereInput = {};
   if (q) {
@@ -57,11 +59,13 @@ export default async function AdminUsersPage({
       { email: { contains: q, mode: "insensitive" } },
     ];
   }
-  if (status) where.status = status as UserStatus;
-  if (role) where.role = role as UserRole;
+  if (status && Object.values(UserStatus).includes(status as UserStatus)) where.status = status as UserStatus;
+  if (role && Object.values(UserRole).includes(role as UserRole)) where.role = role as UserRole;
 
-  const [users, total] = await Promise.all([
-    prisma.user.findMany({
+  const { users, total, page, pageSize } = await prisma.$transaction(async (tx) => {
+    const total = await tx.user.count({ where });
+    const { page, pageSize, skip, take } = resolvePage(parsePageParams(params), total);
+    const users = await tx.user.findMany({
       where,
       select: {
         id: true,
@@ -73,12 +77,12 @@ export default async function AdminUsersPage({
         createdAt: true,
         department: { select: { name: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
       take,
-    }),
-    prisma.user.count({ where }),
-  ]);
+    });
+    return { users, total, page, pageSize };
+  }, { isolationLevel: "RepeatableRead" });
 
   const meta = pageMeta({ totalItems: total, page, pageSize });
 

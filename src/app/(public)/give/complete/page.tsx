@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { paymentDataSchema } from "@/lib/finance/payment-data";
 import { recordPaystackPayment } from "@/lib/finance/paystack";
 import { paystackReferenceSchema } from "@/lib/validations/finance";
 import { checkRateLimit, getClientIp } from "@/lib/ratelimit";
@@ -63,16 +64,17 @@ export default async function GiveCompletePage({ searchParams }: GiveCompletePag
       const result = await response.json();
 
       if (result.status && result.data?.status === "success") {
-        const data = result.data;
-        const amountInNaira = Math.round(Number(data.amount)) / 100;
+        const verified = paymentDataSchema.safeParse(result.data);
+        if (!verified.success || verified.data.reference !== reference) throw new Error("Invalid verified payment or conflicting reference");
+        const data = verified.data;
 
         const recordResult = await recordPaystackPayment({
           reference: data.reference,
-          amount: amountInNaira,
+          amount: data.amount,
           currency: data.currency || "NGN",
-          paid_at: data.paid_at,
-          customer: data.customer,
-          metadata: data.metadata,
+          paid_at: data.paid_at ?? undefined,
+          customer: data.customer ?? undefined,
+          metadata: data.metadata ?? undefined,
         });
 
         if (recordResult.status === "mismatch") {
