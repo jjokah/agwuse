@@ -45,6 +45,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email },
+          // Authentication must not depend on unrelated profile/privacy columns.
+          select: {
+            id: true, email: true, passwordHash: true, firstName: true, lastName: true,
+            emailVerified: true, status: true, profilePhoto: true, image: true,
+            role: true, tokenVersion: true,
+          },
         });
 
         if (!user || !user.passwordHash) {

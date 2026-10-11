@@ -8,7 +8,7 @@ Configure [Node.js 24 in Vercel](https://vercel.com/docs/functions/runtimes/node
 
 Set `DATABASE_URL` to the application's pooled PostgreSQL connection and `DIRECT_DATABASE_URL` to the direct connection used by migrations. Choose `DATABASE_POOL_MAX` for the provider's connection budget across server instances (default 5 per instance). Use TLS as required by the database provider.
 
-Set `AUTH_SECRET` to a unique random value, `AUTH_URL` and `NEXT_PUBLIC_APP_URL` to the deployment origin. Configure Auth.js trusted-host behavior only for the trusted Vercel host. Production startup rejects missing authentication/database configuration. Production email operations reject logging or missing Resend delivery credentials. `/api/health/ready` checks PostgreSQL and returns only `{"status":"healthy"}` or `{"status":"unavailable"}` (503); it does not expose connection details.
+Set `AUTH_SECRET` to a unique random value, `AUTH_URL` and `NEXT_PUBLIC_APP_URL` to the deployment origin. Configure Auth.js trusted-host behavior only for the trusted Vercel host. Production startup rejects missing authentication/database configuration. Production email operations reject logging or missing Resend delivery credentials. `/api/health/ready` checks PostgreSQL connectivity and the directory-privacy schema without reading member records, and returns only `{"status":"healthy"}` or `{"status":"unavailable"}` (503); it does not expose connection details.
 
 Email configuration failures emit an `email_configuration_invalid` startup log and block email operations with explicit errors; they do not prevent unrelated pages from starting. Fix production-scoped email settings and redeploy when this log appears.
 

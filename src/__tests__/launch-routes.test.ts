@@ -21,12 +21,13 @@ import { resetDatabase } from "./integration/helpers";
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.spyOn(console, "error").mockImplementation(() => {});
   mocks.auth.mockResolvedValue({ user: { id: "owner", role: "MEMBER" } });
   vi.stubEnv("TEST_DATABASE_URL", "postgresql://test@localhost/agwuse_test");
   vi.stubEnv("DATABASE_URL", "postgresql://test@localhost/agwuse_test");
   vi.stubEnv("ALLOW_TEST_DATABASE_RESET", "true");
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 const row = { id: "gift", date: new Date("2026-10-09T12:00:00Z"), receiptNumber: "RECEIPT", type: "TITHE", paymentMethod: "CASH", amount: new Decimal("1000.00"), member: null, customCategory: null, category: null, notes: null };
 describe("export boundaries and authorization", () => {
   it("rejects unauthenticated downloads without fetching rows", async () => {
@@ -79,5 +80,12 @@ describe("database safety and readiness", () => {
     const unavailable = await readiness(); expect(unavailable.status).toBe(503);
     expect(await unavailable.json()).toEqual({ status: "unavailable" });
     expect(unavailable.headers.get("Cache-Control")).toBe("no-store");
+  });
+  it("reports unavailable when connectivity succeeds but the release schema is missing", async () => {
+    mocks.query.mockResolvedValueOnce([{ value: 1 }]).mockRejectedValueOnce(new Error('column "directoryShowEmail" does not exist'));
+    const response = await readiness();
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ status: "unavailable" });
+    expect(console.error).toHaveBeenCalledWith(JSON.stringify({ event: "database_readiness_failed", check: "schema" }));
   });
 });
