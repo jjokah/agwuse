@@ -56,10 +56,30 @@ jobs:
         run: npm run typecheck
 
       - name: Unit tests
-        run: npx vitest run --project unit
+        run: npm test
 
       - name: Integration tests
-        run: npx vitest run --project integration
+        run: npm run test:integration
 
       - name: Build
         run: npm run build
+
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser workflows
+        run: npm run test:browser
+
+      - name: Dependency applicability gate
+        if: always()
+        run: npm run audit:dependencies
+
+      - name: Verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-verification
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14

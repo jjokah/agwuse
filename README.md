@@ -1,431 +1,130 @@
 # AG Wuse Church Management System
 
-**Assemblies of God Church, Wuse Zone 5, Abuja** — *Center of Love and Worship*
+Assemblies of God Church, Wuse Zone 5, Abuja — Center of Love and Worship.
 
-A comprehensive church management web application providing a public-facing website, member portal, and administrative backend for church leadership and staff.
+Next.js application with a public church website, member portal, finance workspace and administrative backend. The launch target is Vercel with PostgreSQL, Resend, Paystack, Vercel Blob and Upstash.
 
----
+## Implemented behavior
 
-## Tech Stack
+- Public pages cover church information, leaders, departments, activities, blog/news, announcements, events, gallery, sermons, livestream, prayer requests, testimonies, contact and giving.
+- Registration verifies the email before sign-in and requires separate administrator approval. Verification links expire after 24 hours; password reset links after one hour. Failed/expired verification is recoverable at `/resend-verification`. Repeated registration sends account guidance without replacing existing password-reset tokens.
+- Members can edit profiles, change passwords, view giving and download their own receipts. Giving has date, transaction-type and payment-method filters, a filtered total and CSV download. Expenses and voided transactions are excluded.
+- The directory shows active non-Visitor names and departments. Email and phone sharing are separate profile options, both off by default. Hidden contacts are excluded from server-side selection and search matching. Authorized administrators and finance staff retain access for their work.
+- Finance staff record transactions, track pledges, void entries with an audit trail, and export reports/receipts. CSV exports above 50,000 rows ask the user to narrow the date range.
+- Administrators manage users, content, departments and moderation. Sensitive changes and audits commit together. Media cleanup runs after persistence and retains assets referenced elsewhere.
+- Giving redirects to hosted Paystack checkout. Callback, verification and signed webhook processing use exact integer kobo amounts and the verified reference. Concurrent duplicate callbacks record one ledger entry.
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Framework | Next.js (App Router) | 16.x |
-| Language | TypeScript | 5.x |
-| UI | React | 19.x |
-| Styling | Tailwind CSS | 4.x |
-| Components | shadcn/ui (Base UI) | v4 |
-| Icons | Lucide React | 0.577.x |
-| Database | PostgreSQL | 17.x |
-| ORM | Prisma | 7.x |
-| Auth | Auth.js (next-auth) | v5 |
-| Validation | Zod | 4.x |
-| Forms | React Hook Form | 7.x |
-| Email | Resend + React Email | 6.x |
-| Payments | Paystack | Inline JS |
-| Rich Text | TipTap | 3.x |
-| PDF Export | jsPDF + jspdf-autotable | latest |
-| CSV Export | PapaParse | latest |
-| Rate Limiting | Upstash Redis | latest |
-| Date Utils | date-fns | latest |
+Department-leader portals, event registration, online pledge payments and automated reconciliation are deferred. Assigned department leaders appear on public leader pages but have no separate management portal.
 
----
+## Technology
 
-## Features
+| Area | Implementation |
+| --- | --- |
+| App/UI | Next.js 16.4, React 19, TypeScript, Tailwind 4, shadcn/Base UI, Lucide |
+| Data/auth | PostgreSQL 17, Prisma 7 CLI/client/pg adapter, Auth.js v5 beta, bcrypt |
+| Forms | Native FormData/server actions, React state and Zod |
+| Content | TipTap and DOMPurify |
+| Delivery/storage | Resend/React Email, Vercel Blob |
+| Finance | Hosted Paystack checkout, jsPDF/AutoTable, internal CSV serializer |
+| Limits/tests | Upstash Redis, Vitest, Playwright/Chromium and axe |
 
-### Public Website (18 routes)
-- Home page with hero section, service times, latest news, and upcoming events
-- About / Statement of Faith (16 Assemblies of God doctrines)
-- Leaders page combining ministers, church board, and departmental heads
-- Departments & Ministries directory (23 departments)
-- Weekly Activities schedule
-- Blog / Church News with rich text content
-- Announcements and Events calendar with detail pages
-- Photo Gallery with albums
-- Sermon Archive (audio/video links)
-- Live Stream page (YouTube embed)
-- Prayer Request and Testimony submission forms
-- Membership registration form
-- Contact page with church location and phone numbers
-- Online Giving with bank details and Paystack integration
-- Privacy Policy and Terms of Service pages
-- SEO optimized with sitemap.xml and robots.txt
+Forms do not use React Hook Form. CSV exports do not use PapaParse. Paystack Inline is not used. Exact versions and dependency paths are recorded in `package-lock.json`.
 
-### Authentication & Security
-- Email/password registration with email verification (24h token)
-- Password reset flow with secure tokens (1h expiry)
-- JWT-based sessions with role-based access control
-- 6 user roles: Visitor, Member, Dept Lead, Finance, Admin, Super Admin
-- Middleware-enforced route protection
-- Rate limiting on auth endpoints (Upstash Redis)
-- CSP headers with Paystack and YouTube allowlists
-- HTML sanitization on all user-generated content (DOMPurify)
-- Audit logging for sensitive operations
+## Development setup
 
-### Member Portal
-- Personal dashboard with announcements and upcoming events
-- Giving history with filterable transaction records
-- Profile management (personal info, password change)
-- Searchable member directory (active members only)
+Install Node.js 24, npm and Docker. Clone `https://github.com/jjokah/agwuse.git`, then run commands from the project directory. Copy `.env.example` to `.env`:
 
-### Admin Panel
-- Dashboard with stat cards (members, giving this month/year) and recent activity
-- **User Management**: Search, filter, approve, assign roles, deactivate accounts
-- **Financial Management**: Record tithes/offerings/donations/expenses, pledge tracking, receipt generation (PDF), financial reports with CSV/PDF export, auto-generated receipt numbers (`AG-YYYY-NNNNN`)
-- **Content Management**: Blog editor (TipTap WYSIWYG), event scheduling, sermon archive, gallery management, prayer request/testimony moderation queue
-- **Settings**: Church info, department CRUD, audit log viewer
-
-### Finance Portal
-- Simplified dashboard for Finance Officers
-- Quick transaction entry
-- Report generation and export
-
-### Online Giving (Paystack)
-- Paystack Inline JS integration (React 19 compatible)
-- Server-side payment initialization and webhook verification
-- Automatic transaction creation on successful payment
-- Supports cards, bank transfers, and USSD
-
----
-
-## Project Structure
-
-```
-agwuse/
-├── prisma/
-│   ├── prisma.config.ts         # Prisma 7 config with pg adapter
-│   ├── schema.prisma            # 19 models, 14 enums
-│   ├── seed.ts                  # Departments, categories, super admin
-│   └── migrations/
-├── public/
-│   └── images/
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx           # Root layout (fonts, providers, toaster)
-│   │   ├── globals.css          # Tailwind v4 theme + brand colors
-│   │   ├── (public)/            # Public pages (header + footer layout)
-│   │   ├── (auth)/              # Auth pages (centered card layout)
-│   │   ├── (dashboard)/         # Protected pages (sidebar layout)
-│   │   │   ├── dashboard/
-│   │   │   ├── profile/
-│   │   │   ├── my-giving/
-│   │   │   ├── directory/
-│   │   │   ├── finance/         # Finance Officer routes
-│   │   │   └── admin/           # Admin routes
-│   │   │       ├── users/
-│   │   │       ├── finance/
-│   │   │       ├── content/
-│   │   │       └── settings/
-│   │   └── api/
-│   │       ├── auth/[...nextauth]/
-│   │       └── paystack/
-│   ├── components/
-│   │   ├── ui/                  # shadcn/ui components
-│   │   ├── layout/              # Header, footer, sidebar, topbar
-│   │   ├── forms/               # Login, register, profile, submission forms
-│   │   ├── public/              # Hero, service times, minister cards
-│   │   └── shared/              # DataTable, stat cards, confirm dialog
-│   ├── lib/
-│   │   ├── auth.ts              # Auth.js config with Prisma adapter
-│   │   ├── route-access.ts      # Pure route-access rules used by the proxy
-│   │   ├── tz.ts                # Africa/Lagos date/time helpers
-│   │   ├── prisma.ts            # PrismaClient singleton
-│   │   ├── constants.ts         # Church info, nav items, roles
-│   │   ├── utils.ts             # cn(), formatCurrency(), formatDate()
-│   │   ├── sanitize.ts          # HTML sanitization
-│   │   ├── pdf.ts               # Receipt and report PDF generation
-│   │   ├── csv.ts               # CSV export
-│   │   ├── actions/             # Server actions (auth, user, admin, finance, content)
-│   │   ├── email/               # Resend wrapper + email templates
-│   │   └── validations/         # Zod schemas
-│   ├── hooks/                   # Custom React hooks
-│   ├── proxy.ts                 # Next.js 16 proxy: auth + RBAC route protection
-│   └── types/                   # TypeScript types, next-auth augmentation
-├── docker-compose.yml           # PostgreSQL 17
-├── package.json
-├── next.config.ts
-└── tsconfig.json
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env
 ```
 
-**19 database models** | **14 enums**
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 24.x (LTS)
-- Docker (for PostgreSQL)
-- npm
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/your-org/agwuse.git
-cd agwuse
-```
-
-### 2. Install dependencies
-
-```bash
-npm ci
-```
-
-### 3. Set up environment variables
-
-```bash
+```sh
+# Unix
 cp .env.example .env
 ```
 
-Edit `.env` with your values (see [Environment Variables](#environment-variables) below).
+Choose a random `AUTH_SECRET` and seed administrator credentials. Keep the local database URLs on port **5433**, matching Compose. Start Docker, then:
 
-> **The app will not start without `.env`.** It is gitignored, so a fresh clone has no
-> `.env` at all — `DATABASE_URL` is then `undefined` and every Prisma query fails with
-> `ECONNREFUSED`. See [Troubleshooting](#troubleshooting).
->
-> Note the database port: `docker-compose.yml` maps PostgreSQL to host port **5433**,
-> not the default 5432. The values in `.env.example` already match.
-
-### 4. Start the database
-
-```bash
-docker compose up -d
-```
-
-This starts PostgreSQL 17 on port **5433** with:
-- User: `agwuse`
-- Password: `agwuse_dev_2026`
-- Database: `agwuse`
-
-### 5. Run database migrations and seed
-
-```bash
-# PowerShell: choose credentials before the first seed
-$env:SEED_ADMIN_EMAIL="admin@agwuse.org"
-$env:SEED_ADMIN_PASSWORD="choose-a-strong-development-password"
-
+```sh
+npm ci
+npm run db:generate
+docker compose up -d db
 npm run db:deploy
 npm run db:seed
-```
-
-The seed creates:
-- A super admin account using `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. In
-  development, a random password is printed if `SEED_ADMIN_PASSWORD` is unset.
-- 23 church departments
-- Default financial categories
-- Church settings (name, address, phones, bank details)
-
-### 6. Start the development server
-
-```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to view the public site.
+Set `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` before seeding; [setup and testing](docs/testing.md) gives Windows and Unix examples. Development seed generates and prints a random password if none is supplied. Open [localhost:3000](http://localhost:3000), and sign in at `/login` with the seed credentials.
 
-Log in at [http://localhost:3000/login](http://localhost:3000/login) with the super admin credentials.
+Use `EMAIL_TRANSPORT=log` for local recovery: the server terminal prints usable verification/reset links. Production rejects email logging and requires configured Resend delivery.
 
----
+## Configuration
 
-## Environment Variables
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Application PostgreSQL connection, pooled when required by the provider |
+| `DIRECT_DATABASE_URL` | Direct PostgreSQL connection for migrations |
+| `AUTH_SECRET` | Unique secret; legacy `NEXTAUTH_SECRET` is also accepted |
+| `AUTH_URL`, `NEXT_PUBLIC_APP_URL` | Deployment origin; public URL is embedded at build time |
+| `EMAIL_TRANSPORT` | `log` only for development/test; `resend` for delivery |
+| `RESEND_API_KEY`, `EMAIL_FROM` | Required for production delivery; verified sender domain |
+| `PAYSTACK_SECRET_KEY` | Test key in staging, live key in production |
+| `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | Reserved; unused by current hosted checkout |
+| `BLOB_READ_WRITE_TOKEN` | Environment-specific Blob store token |
+| `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | Shared IP/account limits; configure both for Vercel |
+| `DATABASE_POOL_MAX` | Connection budget per server instance, default 5 |
+| `AUTH_REVALIDATE_SECONDS` | Session database refresh interval, default 60 seconds |
+| `TRUSTED_PROXY_HOPS` | Trusted proxy chain for client IP extraction, default 1 |
+| `TEST_DATABASE_URL`, `ALLOW_TEST_DATABASE_RESET` | Disposable test authorization; never use real data |
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `DATABASE_URL` | PostgreSQL connection string | Yes |
-| `DIRECT_DATABASE_URL` | Direct PostgreSQL connection (bypasses pooler) | Yes |
-| `AUTH_SECRET` | Auth.js secret key (generate with `openssl rand -base64 32`) | Yes |
-| `NEXTAUTH_SECRET` | Legacy name, accepted instead of `AUTH_SECRET` | No |
-| `AUTH_URL` | App base URL (`http://localhost:3000` for dev) | Yes |
-| `NEXT_PUBLIC_APP_URL` | Public app URL (same as AUTH_URL) | Yes |
-| `EMAIL_TRANSPORT` | `log` for local development or `resend` for real delivery | No |
-| `EMAIL_FROM` | Sender identity on a verified Resend domain | For real email |
-| `RESEND_API_KEY` | Resend email service API key | For real email |
-| `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | Reserved for client-side Paystack integrations; currently unused | No |
-| `PAYSTACK_SECRET_KEY` | Paystack secret key | For payments |
-| `BLOB_READ_WRITE_TOKEN` | Vercel Blob read/write token | For uploads |
-| `UPSTASH_REDIS_REST_URL` | Upstash Redis URL | For rate limiting |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis token | For rate limiting |
-| `DATABASE_POOL_MAX` | Max pg connections per server instance (default 5) | No |
-| `AUTH_REVALIDATE_SECONDS` | How often a session is re-checked against the DB (default 60) | No |
-| `TRUSTED_PROXY_HOPS` | Proxies in front of the app, for client-IP rate limiting (default 1) | No |
+Production validates core database, auth and email settings. Missing Upstash uses a local limiter with a production warning; it cannot share limits across Vercel instances and must be configured before launch. `/api/health/ready` returns only healthy/unavailable database status.
 
----
+## Roles and access
 
-## Database
+All roles can browse public pages. Protected pages/actions require active accounts; credentials sign-in also requires a verified email.
 
-### Models (19)
+| Role | Additional access |
+| --- | --- |
+| Visitor | Dashboard, profile and own giving/receipts; excluded from directory |
+| Member | Dashboard, profile, own giving and directory |
+| Dept Lead | Member access; department assignment, no separate leader portal |
+| Finance | Member access plus finance recording, pledges, transactions and reports |
+| Admin | Users, finance, content, departments and audit logs |
+| Super Admin | Administrator access plus church/system settings and protected role operations |
 
-| Category | Models |
-|----------|--------|
-| Auth | User, Account, Session, VerificationToken, Token |
-| Core | Department |
-| Financial | FinancialTransaction, Pledge, FinancialCategory, PaymentIntent, ReceiptCounter |
-| Content | BlogPost, Event, Submission, GalleryImage, Sermon, LiveStreamConfig |
-| System | AuditLog, ChurchSettings |
+The proxy requires an actual user identity. Server-side guards recheck the database role, status and session version; private metadata guards run before loading account details. Password changes, deactivation and sensitive role changes revoke sessions.
 
-### Prisma Commands
+Calendar-only fields are validated and stored as UTC dates. Event wall-clock inputs, displayed dates and day/report boundaries use Africa/Lagos. Open pledges become overdue after their due calendar day ends in Lagos, consistently in filters and presentation.
 
-```bash
-npm run db:migrate      # Create and apply migrations
-npm run db:push         # Push schema changes (no migration file)
-npm run db:generate     # Regenerate Prisma Client
-npm run db:studio       # Open Prisma Studio (visual DB editor)
-npm run db:seed         # Seed database with initial data
-```
+## Commands and verification
 
-> **Note**: Prisma 7 requires the `--config prisma/prisma.config.ts` flag. All `db:*` scripts include this automatically.
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build`, `npm start` | Production build/server |
+| `npm run lint`, `npm run typecheck` | ESLint and TypeScript |
+| `npm test` | Unit tests only |
+| `npm run test:integration` | Destructive suites, explicitly isolated and authorized |
+| `npm run test:browser` | Browser workflows with a built server and disposable database |
+| `npm run audit:dependencies` | Dependency report and applicability/expiry gate |
+| `npm run db:deploy` | Apply checked-in migrations |
+| `npm run db:migrate` | Create/apply development migrations |
+| `npm run db:generate`, `npm run db:studio` | Generate client / inspect database |
+| `npm run db:seed` | Initial development data and administrator |
 
----
+Integration/browser tests truncate tables and require a database name ending in `_test`, explicit `TEST_DATABASE_URL`, `ALLOW_TEST_DATABASE_RESET=true` and matching `current_database()`. Misconfiguration and empty discovery fail. Never use development or production. See [safe testing commands](docs/testing.md).
 
-## Authentication & Roles
+CI gates lint, types, unit tests, disposable PostgreSQL integrations, production build, browser workflows and dependency findings. Provider tests use mocks; live integrations need separate staging validation. Remaining high findings and remediation are documented in [dependency findings](docs/dependency-findings.md).
 
-| Role | Access |
-|------|--------|
-| Visitor | Public pages only |
-| Member | Public + Dashboard, profile, giving history, directory |
-| Dept Lead | Member access + department-specific features |
-| Finance | Member access + financial recording and reports |
-| Admin | Full backend: users, finance, content, settings |
-| Super Admin | All access including system settings and audit logs |
+## Deployment and operations
 
-Route protection is enforced by the Next.js 16 proxy (`src/proxy.ts`, Node.js runtime) using the
-rules in `src/lib/route-access.ts`. Every page re-checks access server-side with `requirePageRole()`
-(redirects), and server actions / route handlers use `requireAuth()` / `requireRole()`, which read the
-user's current role and status from the database.
+Follow the [Vercel launch runbook](docs/launch-runbook.md) for isolated environments, production-only migrations, providers, staging validation, backup/restore, failed-payment investigation and rollback. Apply the additive directory-privacy migration before deploying its UI. Do not put production migrations in a shared preview build command.
 
-### Time zone
+If database pages fail, check `.env`, database port 5433, `docker compose up -d db`, and migration status. A missing departmental-head section on `/leaders` can mean no active department has an assigned leader; assign one under Admin → Settings → Departments. Docker Desktop must be running and its CLI available in the terminal.
 
-All wall-clock times (event times, "today", report day/month boundaries, displayed dates) are
-**Africa/Lagos** (UTC+1, no DST), regardless of the server's time zone. Use the helpers in
-`src/lib/tz.ts` and `formatDate()`/`formatDateTime()` from `src/lib/utils.ts`; never
-`toISOString().split("T")[0]` for "today".
+## Project layout
 
----
-
-## NPM Scripts
-
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm run start` | Start production server |
-| `npm run lint` | Run ESLint |
-| `npm run typecheck` | Type-check with `tsc --noEmit` |
-| `npm test` | Run the Vitest suites |
-| `npm run test:integration` | Run the database integration suites (needs a `*_test` database, see below) |
-| `npm run db:deploy` | Apply pending migrations (CI / production) |
-| `npm run db:migrate` | Run Prisma migrations |
-| `npm run db:push` | Push schema to database |
-| `npm run db:generate` | Generate Prisma Client |
-| `npm run db:studio` | Open Prisma Studio |
-| `npm run db:seed` | Seed database |
-
-### Integration tests
-
-`src/__tests__/integration/*.int.test.ts` exercise the finance ledger and Paystack
-recording against a real PostgreSQL database (receipt numbering, pledge payments and
-voids, concurrent Paystack writers). They **truncate tables**, so they only run when
-`DATABASE_URL` points at a database whose name contains `_test`; otherwise the
-project collects no files. CI runs them against its own Postgres service.
-
-```powershell
-# One-time: create and migrate a local test database in the Docker container
-docker exec agwuse-db psql -U agwuse -d agwuse -c "create database agwuse_test"
-$env:DATABASE_URL="postgresql://agwuse:agwuse_dev_2026@localhost:5433/agwuse_test"
-$env:DIRECT_DATABASE_URL=$env:DATABASE_URL
-npm run db:deploy
-
-# Run
-npm run test:integration
-```
-
----
-
-## Troubleshooting
-
-### Pages using the database fail with `PrismaClientKnownRequestError`
-
-Symptom — a DB-backed page (`/departments`, `/leaders`, `/blog`, the dashboard, login)
-shows a Next.js error overlay like:
-
-```
-Invalid `prisma.department.findMany()` invocation in ...
-```
-
-...often with **no message body after it**. The empty body is the tell: it means the
-connection was refused before any query ran (`code: ECONNREFUSED`), not that the query
-is malformed. Static pages (`/`, `/about`, `/contact`) keep working, which can make it
-look page-specific when it is not.
-
-Check, in order:
-
-1. **Does `.env` exist?** It is gitignored, so a fresh clone has none.
-   `src/lib/prisma.ts` reads `process.env.DATABASE_URL!` with no fallback — if unset,
-   `pg` silently tries `localhost:5432` and is refused.
-   ```bash
-   cp .env.example .env
-   ```
-2. **Is the database container running?**
-   ```bash
-   docker compose up -d db
-   docker ps --filter name=agwuse-db
-   ```
-3. **Is `DATABASE_URL` on the right port?** Docker maps PostgreSQL to **5433**, not
-   5432. A URL ending in `:5432/agwuse` is refused unless you also run a local Postgres.
-4. **Confirm the port is actually listening:**
-   ```bash
-   # PowerShell
-   (Test-NetConnection localhost -Port 5433).TcpTestSucceeded
-   ```
-5. **Have migrations been applied?** A reachable but empty database throws a different
-   error (`P2021: table does not exist`). Fix with `npm run db:migrate && npm run db:seed`.
-
-### `/leaders` renders, but the "Departmental Heads" section is missing
-
-This is expected, not a failure. Ministers and the church board on `/leaders` are static
-content in the page file; **departmental heads are read from the database** — only
-departments that are `isActive` *and* have a `leaderId` assigned appear, and the whole
-section is hidden when none match.
-
-Assign leaders under **Admin → Settings → Departments → [department] → Leader**. The
-seed creates 23 departments but does not assign leaders to them.
-
-Note that this query is deliberately wrapped in a `try/catch` that falls back to an empty
-list, so a database outage hides that one section instead of taking down the static
-ministers and board content with it. If the section is unexpectedly empty, check the
-server console for `Failed to load departmental heads:` before assuming it is a data issue.
-
-### Docker command not found
-
-Docker Desktop must be running, and its CLI must be on `PATH`. If `docker ps` fails in
-your shell but Docker Desktop is open, restart the terminal so it picks up `PATH`.
-
----
-
-## Deployment
-
-### Vercel (Recommended)
-
-1. Push the repository to GitHub
-2. Import the project on [Vercel](https://vercel.com)
-3. Set all environment variables in the Vercel dashboard
-4. Use a managed PostgreSQL provider (Neon, Supabase, Railway) for the database
-5. Update `DATABASE_URL` and `DIRECT_DATABASE_URL` to point to the managed database
-6. Deploy
-
-### Production Checklist
-
-- [ ] Set `AUTH_SECRET` to a strong random value
-- [ ] Configure Resend with a verified domain
-- [ ] Set up Paystack live keys (switch from test mode)
-- [ ] Configure Vercel Blob for image uploads
-- [ ] Set up Upstash Redis for rate limiting
-- [ ] Enable daily database backups
-- [ ] Review CSP headers in `src/lib/security-headers.ts`
-
----
-
-## License
+`src/app` contains public/auth/dashboard routes and APIs; `src/components` contains UI/forms/shared finance views; `src/lib` contains guards, actions, validators and provider/data helpers. `prisma` holds schema, migrations and seed. Unit/integration tests live in `src/__tests__`, browser tests in `tests/browser`, and operations guidance in `docs`.
 
 This is a private project built for Assemblies of God Church, Wuse Zone 5, Abuja.
