@@ -190,6 +190,8 @@ model User {
   status        UserStatus    @default(PENDING)
   tokenVersion  Int           @default(0)
   profilePhoto  String?
+  directoryShowEmail Boolean @default(false)
+  directoryShowPhone Boolean @default(false)
   image         String?
   name          String?
 

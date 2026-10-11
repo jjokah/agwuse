@@ -1,0 +1,123 @@
+{
+  "@next/eslint-plugin-next": {
+    "range": ">=14.3.0-canary.0",
+    "via": [
+      "fast-glob"
+    ],
+    "applicability": "Build/development file globs and generated component tooling. The deployed app does not accept user-supplied glob patterns or expose these CLIs. Trusted repository files can still trigger resource exhaustion in developer/CI tooling.",
+    "remediation": "Keep lint/component tooling on compatible releases; monitor upstream braces patch and parent upgrades. Do not apply the suggested old Next.js/shadcn major downgrade. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "@prisma/config": {
+    "range": "6.13.0-dev.1 - 8.1.0-dev.4",
+    "via": [
+      "deepmerge-ts"
+    ],
+    "applicability": "Prisma CLI configuration merging uses trusted local configuration. No user-submitted recursive object graph is passed to deepmerge-ts. Production database queries use Prisma Client and the PostgreSQL adapter, not CLI configuration merging.",
+    "remediation": "Track aligned Prisma 7 and its config dependency update to deepmerge-ts 8. Avoid overriding a major API without upstream compatibility evidence. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "@shadcn/registry": {
+    "range": "<=0.0.0-rc-20261007105214 || >=0.1.0",
+    "via": [
+      "fast-glob"
+    ],
+    "applicability": "Build/development file globs and generated component tooling. The deployed app does not accept user-supplied glob patterns or expose these CLIs. Trusted repository files can still trigger resource exhaustion in developer/CI tooling.",
+    "remediation": "Keep lint/component tooling on compatible releases; monitor upstream braces patch and parent upgrades. Do not apply the suggested old Next.js/shadcn major downgrade. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "@ts-morph/common": {
+    "range": "0.2.0 - 0.24.0 || 0.26.0 - 0.27.0",
+    "via": [
+      "fast-glob"
+    ],
+    "applicability": "Build/development file globs and generated component tooling. The deployed app does not accept user-supplied glob patterns or expose these CLIs. Trusted repository files can still trigger resource exhaustion in developer/CI tooling.",
+    "remediation": "Keep lint/component tooling on compatible releases; monitor upstream braces patch and parent upgrades. Do not apply the suggested old Next.js/shadcn major downgrade. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "braces": {
+    "range": "*",
+    "via": [
+      "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm"
+    ],
+    "applicability": "Build/development file globs and generated component tooling. The deployed app does not accept user-supplied glob patterns or expose these CLIs. Trusted repository files can still trigger resource exhaustion in developer/CI tooling.",
+    "remediation": "Keep lint/component tooling on compatible releases; monitor upstream braces patch and parent upgrades. Do not apply the suggested old Next.js/shadcn major downgrade. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "deepmerge-ts": {
+    "range": "<8.0.0",
+    "via": [
+      "https://github.com/advisories/GHSA-ggr8-5vv4-36mx"
+    ],
+    "applicability": "Prisma CLI configuration merging uses trusted local configuration. No user-submitted recursive object graph is passed to deepmerge-ts. Production database queries use Prisma Client and the PostgreSQL adapter, not CLI configuration merging.",
+    "remediation": "Track aligned Prisma 7 and its config dependency update to deepmerge-ts 8. Avoid overriding a major API without upstream compatibility evidence. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "eslint-config-next": {
+    "range": ">=14.3.0-canary.0",
+    "via": [
+      "@next/eslint-plugin-next"
+    ],
+    "applicability": "Build/development file globs and generated component tooling. The deployed app does not accept user-supplied glob patterns or expose these CLIs. Trusted repository files can still trigger resource exhaustion in developer/CI tooling.",
+    "remediation": "Keep lint/component tooling on compatible releases; monitor upstream braces patch and parent upgrades. Do not apply the suggested old Next.js/shadcn major downgrade. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "fast-glob": {
+    "range": "*",
+    "via": [
+      "micromatch"
+    ],
+    "applicability": "Build/development file globs and generated component tooling. The deployed app does not accept user-supplied glob patterns or expose these CLIs. Trusted repository files can still trigger resource exhaustion in developer/CI tooling.",
+    "remediation": "Keep lint/component tooling on compatible releases; monitor upstream braces patch and parent upgrades. Do not apply the suggested old Next.js/shadcn major downgrade. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "micromatch": {
+    "range": ">=0.2.0",
+    "via": [
+      "braces"
+    ],
+    "applicability": "Build/development file globs and generated component tooling. The deployed app does not accept user-supplied glob patterns or expose these CLIs. Trusted repository files can still trigger resource exhaustion in developer/CI tooling.",
+    "remediation": "Keep lint/component tooling on compatible releases; monitor upstream braces patch and parent upgrades. Do not apply the suggested old Next.js/shadcn major downgrade. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "mysql2": {
+    "range": "<=3.23.0",
+    "via": [
+      "https://github.com/advisories/GHSA-3f6p-5ww8-9rcr",
+      "https://github.com/advisories/GHSA-rgwj-5xj2-c3m3"
+    ],
+    "applicability": "Inherited through Prisma CLI development tooling/peer path. This project uses PostgreSQL via @prisma/adapter-pg, never MySQL connections, MySQL auth plugins or compressed MySQL protocol.",
+    "remediation": "Upgrade aligned Prisma 7 when it removes/updates this path; review compatible mysql2 patch with upstream. Do not downgrade Prisma to version 6. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "prisma": {
+    "range": "6.13.0-dev.1 - 8.1.0-dev.6",
+    "via": [
+      "@prisma/config",
+      "mysql2"
+    ],
+    "applicability": "Prisma CLI configuration merging uses trusted local configuration. No user-submitted recursive object graph is passed to deepmerge-ts. Production database queries use Prisma Client and the PostgreSQL adapter, not CLI configuration merging.",
+    "remediation": "Track aligned Prisma 7 and its config dependency update to deepmerge-ts 8. Avoid overriding a major API without upstream compatibility evidence. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "shadcn": {
+    "range": "<=0.0.0-rc-20261007105214 || >=2.0.0",
+    "via": [
+      "@shadcn/registry",
+      "fast-glob",
+      "ts-morph"
+    ],
+    "applicability": "Build/development file globs and generated component tooling. The deployed app does not accept user-supplied glob patterns or expose these CLIs. Trusted repository files can still trigger resource exhaustion in developer/CI tooling.",
+    "remediation": "Keep lint/component tooling on compatible releases; monitor upstream braces patch and parent upgrades. Do not apply the suggested old Next.js/shadcn major downgrade. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  },
+  "ts-morph": {
+    "range": "6.0.1 - 23.0.0 || 25.0.0 - 26.0.0",
+    "via": [
+      "@ts-morph/common"
+    ],
+    "applicability": "Build/development file globs and generated component tooling. The deployed app does not accept user-supplied glob patterns or expose these CLIs. Trusted repository files can still trigger resource exhaustion in developer/CI tooling.",
+    "remediation": "Keep lint/component tooling on compatible releases; monitor upstream braces patch and parent upgrades. Do not apply the suggested old Next.js/shadcn major downgrade. Review before the next release or 2026-11-09.",
+    "reviewBy": "2026-11-09"
+  }
+}

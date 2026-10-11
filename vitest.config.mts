@@ -1,16 +1,17 @@
 import { defineConfig } from "vitest/config";
 import path from "path";
+import { testDatabaseName } from "./src/lib/test-database";
 
 const alias = { "@": path.resolve(import.meta.dirname, "./src") };
 
-// Integration tests (*.int.test.ts) need a disposable database whose URL contains "_test".
-const hasTestDb = (process.env.DATABASE_URL ?? "").includes("_test");
+if (process.argv.some((arg) => arg === "integration" || arg === "--project=integration")) {
+  testDatabaseName();
+}
 
 export default defineConfig({
   resolve: { alias },
   test: {
-    // There are no integration suites yet; an empty project must not fail CI.
-    passWithNoTests: true,
+    passWithNoTests: false,
     projects: [
       {
         resolve: { alias },
@@ -18,6 +19,7 @@ export default defineConfig({
           name: "unit",
           environment: "node",
           globals: true,
+          maxWorkers: 2,
           include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
           exclude: ["src/**/*.int.test.ts"],
         },
@@ -28,8 +30,11 @@ export default defineConfig({
           name: "integration",
           environment: "node",
           globals: true,
-          // Without a test database, collect nothing instead of touching a real one.
-          include: hasTestDb ? ["src/**/*.int.test.ts"] : [],
+          include: ["src/**/*.int.test.ts"],
+          env: {
+            DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+            DIRECT_DATABASE_URL: process.env.TEST_DATABASE_URL ?? "",
+          },
           // Suites share one database and truncate it: run files one at a time
           fileParallelism: false,
           sequence: { concurrent: false },

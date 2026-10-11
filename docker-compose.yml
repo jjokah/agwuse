@@ -12,5 +12,22 @@ services:
     volumes:
       - agwuse_pgdata:/var/lib/postgresql/data
 
+  test-db:
+    image: postgres:17-alpine
+    profiles: [test]
+    environment:
+      POSTGRES_USER: agwuse_test
+      POSTGRES_PASSWORD: isolated_test_only
+      POSTGRES_DB: agwuse_test
+    ports:
+      - "127.0.0.1:5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agwuse_test -d agwuse_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
 volumes:
   agwuse_pgdata:

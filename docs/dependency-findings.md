@@ -1,0 +1,16 @@
+# Dependency review — 9 October 2026
+
+The patched lockfile has **15 affected entries overall** (13 high, 2 moderate, 0 critical), and **4 high entries excluding development dependencies**. These are dependency entries and inherited severity, not 15 independent proven application exploits. Regenerate with `npm run audit:dependencies`; the report can change as new advisories are published.
+
+Upgraded Next.js and its ESLint configuration together to 16.4.0, Auth.js to beta.32, Prisma CLI/client/adapter together to 7.10.0, TipTap to 3.31.4, jsPDF to 4.2.1, DOMPurify's wrapper to 3.23.0 and Resend to 6.32.1. Compatible transitive patches were applied with `npm audit fix`, without `--force`. Node.js 24 satisfies the sanitization wrapper's increased runtime minimum.
+
+Every remaining high finding is tracked by affected package, audit range and advisory in [dependency-exceptions.json](dependency-exceptions.json), including its applicability, remediation and review deadline. CI fails for a new high/critical advisory, changed audit range or expired review. Reviewed applicability does not mean the library has been patched or that every possible use is safe.
+
+| Remaining path | Applicability here | Remediation status |
+| --- | --- | --- |
+| `braces` → `micromatch` → `fast-glob` → Next ESLint / shadcn / ts-morph tooling | Stack exhaustion through hostile nested file-glob patterns. These tools process trusted repository/configuration input; the deployed application does not expose glob patterns or these CLIs to users. Developer/CI tooling can still be affected by untrusted repository changes. | Await compatible upstream `braces` and parent patches; review before next release or 9 November 2026. Do not downgrade Next.js/shadcn to the audit's suggested older major versions. |
+| `deepmerge-ts` → `@prisma/config` → Prisma CLI | Recursive object merging can exhaust the stack. Prisma configuration is trusted local code; application requests are not merged by this CLI helper. | Keep Prisma 7 aligned and track an upstream update to deepmerge-ts 8. A major override without compatibility evidence is deferred. Review before next release or 9 November 2026. |
+| `mysql2` → Prisma CLI peer/tooling path | MySQL authentication downgrade and compressed-protocol resource exhaustion. This application connects exclusively to PostgreSQL with `@prisma/adapter-pg`; it does not use MySQL protocol or authentication plugins. npm's production count includes the CLI peer path. | Await a compatible aligned Prisma update/verified transitive patch. Do not downgrade Prisma 7 to 6. Review before next release or 9 November 2026. |
+| `postcss-selector-parser` → Tailwind typography (moderate) | Quadratic processing of hostile selectors; used for trusted build styles, not server-side parsing of user CSS. | Track compatible typography/parser upgrades. Do not apply the suggested old typography downgrade. |
+
+Relevant upstream advisories: [braces](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm), [deepmerge-ts](https://github.com/advisories/GHSA-ggr8-5vv4-36mx), [MySQL auth](https://github.com/advisories/GHSA-3f6p-5ww8-9rcr), [MySQL compression](https://github.com/advisories/GHSA-rgwj-5xj2-c3m3), [selector parsing](https://github.com/advisories/GHSA-rj75-hqrm-r3gf). Keep provider credentials out of tooling that processes untrusted inputs.

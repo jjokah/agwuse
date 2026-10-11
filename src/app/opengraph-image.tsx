@@ -26,6 +26,8 @@ export default async function OpengraphImage() {
             "radial-gradient(circle at 50% 120%, rgba(224,168,46,0.35), transparent 60%)",
         }}
       >
+        {/* ImageResponse requires a plain image element, not next/image. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={logoSrc} alt="" width={140} height={140} />
         <div
           style={{
